@@ -111,7 +111,13 @@ async def mark_seen(redis: Redis, url: str) -> None:
 def _article_from_rss_entry(
     entry: Any, source: NewsSource, query: str
 ) -> Article | None:
-    """Mapeia um entry do feedparser para nosso Article."""
+    """Mapeia um entry do feedparser para nosso Article.
+
+    Para Google News, o entry vem com um sub-elemento `<source url="...">Nome</source>`
+    que identifica o veículo real (G1, EM, Folha…). Preservamos em
+    `source_name` para exibir no dashboard — útil para o usuário entender
+    a origem mesmo sem clicar no link.
+    """
     url = getattr(entry, "link", None)
     title = getattr(entry, "title", None)
     if not url or not title:
@@ -126,13 +132,26 @@ def _article_from_rss_entry(
     elif getattr(entry, "updated_parsed", None):
         pub = datetime(*entry.updated_parsed[:6], tzinfo=timezone.utc)
 
+    # Google News: sub-elemento <source> traz o publisher real.
+    display_name = source.name
+    entry_source = getattr(entry, "source", None)
+    if entry_source:
+        # feedparser expõe como dict-like: {"href": ..., "title": "G1"}
+        pub_name = None
+        if isinstance(entry_source, dict):
+            pub_name = entry_source.get("title") or entry_source.get("value")
+        else:
+            pub_name = getattr(entry_source, "title", None) or str(entry_source)
+        if pub_name:
+            display_name = f"{source.name} — {pub_name}"
+
     return Article(
         url=url,
         title=title.strip(),
         lead=lead,
         published_at=pub,
         source_key=source.key,
-        source_name=source.name,
+        source_name=display_name,
         query=query,
         raw={"summary": lead},
     )
@@ -153,47 +172,97 @@ def _has_climate_hint(art: Article) -> bool:
     return any(hint in haystack for hint in CLIMATE_HINTS)
 
 
+async def _fetch_one_rss_url(
+    client: httpx.AsyncClient, url: str, source_key: str
+) -> feedparser.FeedParserDict | None:
+    """Baixa + parseia um feed RSS. Retorna None em qualquer falha (logada)."""
+    try:
+        resp = await client.get(url)
+        resp.raise_for_status()
+    except httpx.HTTPError as exc:
+        log.warning("news_rss_fetch_failed", source=source_key, url=url, error=str(exc))
+        return None
+    parsed = feedparser.parse(resp.content)
+    return parsed
+
+
 async def _fetch_rss(
     source: NewsSource, queries: list[str], now: datetime
 ) -> list[Article]:
-    """Baixa o feed RSS da fonte e filtra por queries + pistas climáticas."""
+    """Baixa RSS e filtra por queries + (opcionalmente) pistas climáticas.
+
+    Dois modos, escolhidos pela presença de `{query}` no `url_template`:
+
+    - **Feed estático** (ex.: `/rss.xml` de um veículo): baixamos uma vez e
+      filtramos os entries localmente contra todas as queries da barragem.
+    - **Busca RSS** (ex.: Google News `/rss/search?q=...`): fazemos uma
+      request por query, pois cada feed já vem pré-filtrado pelo provedor.
+
+    `source.require_climate_hint=False` desabilita o filtro de palavras-chave
+    — útil quando a query já é específica o bastante (Google News com o nome
+    da barragem no q).
+    """
     if not source.url_template:
         # Fonte desabilitada implicitamente (URL vazia = aguardando descobrir
         # endpoint estável). Mantemos silencioso para não poluir logs.
-        return []
-
-    async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
-        try:
-            resp = await client.get(source.url_template)
-            resp.raise_for_status()
-        except httpx.HTTPError as exc:
-            log.warning("news_rss_fetch_failed", source=source.key, error=str(exc))
-            return []
-
-    parsed = feedparser.parse(resp.content)
-    if not parsed.entries:
         return []
 
     cutoff = now - timedelta(days=source.max_age_days)
     out: list[Article] = []
     seen_urls: set[str] = set()
 
-    for entry in parsed.entries:
-        for q in queries:
-            art = _article_from_rss_entry(entry, source, q)
-            if not art:
-                continue
-            if art.url in seen_urls:
-                continue
-            if art.published_at and art.published_at < cutoff:
-                continue
-            if not _matches_query(art, q):
-                continue
-            if not _has_climate_hint(art):
-                continue
-            seen_urls.add(art.url)
-            out.append(art)
-            break  # bastou uma query casar — não duplica
+    async with httpx.AsyncClient(
+        timeout=15.0,
+        follow_redirects=True,
+        headers={
+            # User-Agent explícito: Google News 403a default do httpx.
+            "User-Agent": (
+                "Mozilla/5.0 (compatible; DIA-bot/1.0; "
+                "+https://dia.linkwise.digital)"
+            )
+        },
+    ) as client:
+        if "{query}" in source.url_template:
+            # Uma request por query — cada feed já vem filtrado.
+            for q in queries:
+                url = source.url_template.format(query=quote_plus(q))
+                parsed = await _fetch_one_rss_url(client, url, source.key)
+                if not parsed or not parsed.entries:
+                    continue
+                for entry in parsed.entries:
+                    art = _article_from_rss_entry(entry, source, q)
+                    if not art:
+                        continue
+                    if art.url in seen_urls:
+                        continue
+                    if art.published_at and art.published_at < cutoff:
+                        continue
+                    if source.require_climate_hint and not _has_climate_hint(art):
+                        continue
+                    seen_urls.add(art.url)
+                    out.append(art)
+        else:
+            # Feed estático — baixamos uma vez e cruzamos com todas as queries.
+            parsed = await _fetch_one_rss_url(client, source.url_template, source.key)
+            if not parsed or not parsed.entries:
+                log.info("news_rss_fetched", source=source.key, candidates=0)
+                return []
+            for entry in parsed.entries:
+                for q in queries:
+                    art = _article_from_rss_entry(entry, source, q)
+                    if not art:
+                        continue
+                    if art.url in seen_urls:
+                        continue
+                    if art.published_at and art.published_at < cutoff:
+                        continue
+                    if not _matches_query(art, q):
+                        continue
+                    if source.require_climate_hint and not _has_climate_hint(art):
+                        continue
+                    seen_urls.add(art.url)
+                    out.append(art)
+                    break  # bastou uma query casar — não duplica
 
     log.info("news_rss_fetched", source=source.key, candidates=len(out))
     return out

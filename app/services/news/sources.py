@@ -34,10 +34,37 @@ class NewsSource:
     card_selector: str | None = None
     # Janela máxima de dias — descartamos notícias mais antigas.
     max_age_days: int = 30
+    # Se `True`, exige que o artigo contenha alguma palavra-chave climática
+    # (CLIMATE_HINTS). Para RSS genérico (feed institucional, últimas notícias)
+    # isso filtra ruído. Para fontes onde a *query* já é específica (ex.:
+    # Google Notícias busca "Barragem Alemães Ouro Preto"), o filtro passa a
+    # descartar matches legítimos — marque `False` nesses casos.
+    require_climate_hint: bool = True
 
 
 NEWS_SOURCES: list[NewsSource] = [
-    # --- RSS feeds (preferidos) -------------------------------------------------
+    # --- Google Notícias RSS (fonte primária) ----------------------------------
+    # Feed agregador estável há 15+ anos: uma busca textual retorna um feed
+    # RSS por query. Cobre G1, Folha, UOL, Estado de Minas, Agência Brasil e
+    # centenas de outros veículos automaticamente. Trocamos manutenção de
+    # seletores CSS (quebram a cada redesign) por dependência num produto
+    # Google estável. Operator `when:30d` limita por idade no próprio search.
+    #
+    # A query já é específica (nome da barragem + município), então não
+    # precisamos filtrar por CLIMATE_HINTS — isso descartaria matches
+    # legítimos que não mencionem "chuva/enchente" explicitamente no título.
+    NewsSource(
+        key="google_news",
+        name="Google Notícias",
+        strategy="rss",
+        url_template=(
+            "https://news.google.com/rss/search"
+            "?q={query}+when:30d&hl=pt-BR&gl=BR&ceid=BR:pt"
+        ),
+        max_age_days=30,
+        require_climate_hint=False,
+    ),
+    # --- RSS feeds diretos (placeholders / desativados) ------------------------
     NewsSource(
         key="agencia_brasil",
         name="Agência Brasil",
@@ -59,8 +86,12 @@ NEWS_SOURCES: list[NewsSource] = [
         url_template="",
         max_age_days=60,
     ),
-    # --- HTML search (Playwright) ----------------------------------------------
-    # Para essas, a query é interpolada no URL e extraímos resultados.
+    # --- HTML search (Playwright) — descontinuados em favor do Google News -----
+    # G1 e EM mudaram o markup das páginas de busca e nossos seletores CSS
+    # pararam de casar (raw_cards=0 em todos os testes de 2026-04). Em vez de
+    # manter scraper frágil, roteamos essas fontes pelo Google Notícias acima.
+    # Mantemos as entradas para documentação + facilidade de reativar se
+    # quisermos voltar ao scraping direto.
     NewsSource(
         key="g1",
         name="G1",

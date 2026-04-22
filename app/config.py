@@ -60,14 +60,18 @@ class Settings(BaseSettings):
     alert_email_to: str = ""
 
     # --- News feature flags ---
-    # Default-enabled: fontes com URL estável e comprovadamente funcionando em 2026.
-    news_source_g1_enabled: bool = True
-    news_source_em_enabled: bool = True
-    # Default-disabled: URLs instáveis / placeholders / backend quebrado.
-    # Ative manualmente via .env quando descobrir o endpoint correto.
-    #   - agencia_brasil: HTTP 500 em todos os endpoints testados
-    #   - mpmg: /rss.xml responde 404 (histórico descontinuado)
+    # Default-enabled: Google Notícias RSS cobre G1 / EM / Folha / UOL /
+    # Agência Brasil automaticamente via agregação. É o único feed que se
+    # provou estável em 2026.
+    news_source_google_news_enabled: bool = True
+    # Default-disabled em 2026-04:
+    #   - g1, em: seletores CSS das páginas de busca mudaram, raw_cards=0
+    #     em todos os testes. Roteamos via google_news no lugar.
+    #   - agencia_brasil: HTTP 500 em todos os endpoints RSS testados
+    #   - mpmg: /rss.xml responde 404 (endpoint histórico descontinuado)
     #   - anm: sem busca pública estável
+    news_source_g1_enabled: bool = False
+    news_source_em_enabled: bool = False
     news_source_agencia_brasil_enabled: bool = False
     news_source_mpmg_enabled: bool = False
     news_source_anm_enabled: bool = False

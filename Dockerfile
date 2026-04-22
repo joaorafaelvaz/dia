@@ -15,27 +15,28 @@ ENV PYTHONUNBUFFERED=1 \
     UV_COMPILE_BYTECODE=1 \
     PATH="/app/.venv/bin:$PATH"
 
-# System dependencies:
-#   - WeasyPrint: pango, cairo, gdk-pixbuf, shared-mime-info, fonts
-#   - Playwright: installed via `playwright install --with-deps` at runtime
-#   - Postgres client libs: libpq-dev for psycopg2-binary fallback
-#   - Build essentials for any wheel that needs compilation
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    curl \
-    ca-certificates \
-    libpq-dev \
-    libpango-1.0-0 \
-    libpangoft2-1.0-0 \
-    libharfbuzz0b \
-    libcairo2 \
-    libgdk-pixbuf-2.0-0 \
-    libffi-dev \
-    shared-mime-info \
-    fonts-dejavu-core \
-    fonts-liberation \
-    libjpeg-dev \
-    zlib1g-dev \
+# System dependencies (Fase 1):
+#   - build-essential: para wheels Python que precisam compilar
+#   - curl + ca-certificates: healthcheck + HTTPS para Open-Meteo
+#   - libpq-dev: fallback se asyncpg/psycopg2 wheel estiver ausente
+#   - zlib1g-dev + libffi-dev: libs comuns usadas por várias wheels
+#
+# `apt-get upgrade` antes do install sincroniza dpkg com o repo e evita
+# "Sub-process dpkg returned error code 1" em libdpkg-perl quando o mirror
+# Debian recebeu update mais novo que a base image python:3.11-slim.
+#
+# Playwright (Fase 2) e WeasyPrint (Fase 3) trazem suas próprias deps de sistema
+# — adicionar aqui quando aquelas fases subirem.
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends \
+        build-essential \
+        curl \
+        ca-certificates \
+        libpq-dev \
+        libffi-dev \
+        zlib1g-dev \
+    && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv

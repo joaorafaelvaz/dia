@@ -15,24 +15,60 @@ ENV PYTHONUNBUFFERED=1 \
     UV_COMPILE_BYTECODE=1 \
     PATH="/app/.venv/bin:$PATH"
 
-# Fase 1: Python deps (asyncpg, pandas, numpy, lxml, orjson, hiredis) têm wheels
-# manylinux2014 para Python 3.11 amd64.
+# Fase 1 + Fase 2: Python deps (asyncpg, pandas, numpy, lxml, orjson, hiredis)
+# têm wheels manylinux2014 para Python 3.11 amd64. Chromium headless (Fase 2)
+# precisa das libs listadas abaixo.
 #
-# Fase 2: Playwright/Chromium headless precisa de libs nativas (nss, atk, libx11,
-# libxcomposite, libxdamage, libxrandr, libgbm, libasound2, libpango, libcairo).
-# Em vez de listar tudo na mão, instalamos chromium via `playwright install
-# --with-deps` mais abaixo, depois que o pacote Python playwright estiver
-# instalado no venv.
+# NÃO usamos `playwright install --with-deps` porque a tentativa do Playwright
+# de rodar `apt-get install` aninhado falha intermitentemente no Debian bookworm
+# (conflitos de dpkg em libxcb-sync1 / xvfb). Listamos as deps manualmente em
+# um único `apt-get install` — mais previsível e reprodutível.
 #
-#   - curl: HEALTHCHECK + debugging
-#   - ca-certificates: HTTPS ao Open-Meteo / news sources
-#   - fonts-liberation + fontconfig: evita squares em páginas renderizadas
+# Lista verificada contra:
+#   playwright 1.44 / chromium 124 / debian 12 bookworm amd64
+# Fontes: docs oficiais Playwright + saída de `ldd` no chromium binary.
+#
+#   curl                 → HEALTHCHECK + debugging
+#   ca-certificates      → HTTPS ao Open-Meteo / news sources
+#   fonts-liberation     → fallback de fontes sem-serif
+#   fontconfig           → resolução de fontes no Chromium
+#   libnss3 libnspr4     → networking + criptografia do Chromium
+#   libatk*              → acessibilidade (headless ainda requer)
+#   libcups2             → libcups: Chromium linka mesmo em headless
+#   libdrm2 libgbm1      → GPU/Mesa (para --disable-gpu headless)
+#   libxkbcommon0        → teclado
+#   libxcomposite1       → compositor X (stub)
+#   libxdamage1          → X damage extension
+#   libxfixes3           → X fixes extension
+#   libxrandr2           → X randr extension
+#   libasound2           → áudio (stub, mas o binário linka)
+#   libatspi2.0-0        → acessibilidade GTK
+#   libpango-1.0-0       → renderização de texto
+#   libcairo2            → renderização 2D
+#   libxshmfence1        → sincronização GPU / drm
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         curl \
         ca-certificates \
         fonts-liberation \
         fontconfig \
+        libnss3 \
+        libnspr4 \
+        libatk1.0-0 \
+        libatk-bridge2.0-0 \
+        libcups2 \
+        libdrm2 \
+        libxkbcommon0 \
+        libxcomposite1 \
+        libxdamage1 \
+        libxfixes3 \
+        libxrandr2 \
+        libgbm1 \
+        libasound2 \
+        libatspi2.0-0 \
+        libpango-1.0-0 \
+        libcairo2 \
+        libxshmfence1 \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -57,16 +93,14 @@ COPY scripts ./scripts
 # Sync again to install the project itself
 RUN uv sync --no-dev
 
-# Playwright + Chromium (Fase 2 — news scraping)
-# `playwright install --with-deps chromium` baixa o browser e instala as libs
-# nativas via apt. Fazemos isso APÓS o `uv sync` para que o pacote Python
-# `playwright` já esteja no venv. Cleanup das listas apt depois.
+# Playwright Chromium — apenas baixa o binário (libs nativas já instaladas acima).
+# NUNCA usar `--with-deps` aqui: o Playwright lança apt-get aninhado que falha
+# sem razão clara em Debian bookworm (ver comentário no bloco apt principal).
 #
-# PLAYWRIGHT_BROWSERS_PATH=/ms-playwright mantém os browsers em caminho
-# previsível (necessário em multi-stage futuro).
+# PLAYWRIGHT_BROWSERS_PATH=/ms-playwright mantém os browsers num caminho
+# previsível, útil para debug e para multi-stage builds futuros.
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
-RUN uv run playwright install --with-deps chromium \
-    && rm -rf /var/lib/apt/lists/*
+RUN uv run playwright install chromium
 
 # Default port for API service
 EXPOSE 8000

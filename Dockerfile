@@ -15,27 +15,18 @@ ENV PYTHONUNBUFFERED=1 \
     UV_COMPILE_BYTECODE=1 \
     PATH="/app/.venv/bin:$PATH"
 
-# System dependencies (Fase 1):
-#   - build-essential: para wheels Python que precisam compilar
-#   - curl + ca-certificates: healthcheck + HTTPS para Open-Meteo
-#   - libpq-dev: fallback se asyncpg/psycopg2 wheel estiver ausente
-#   - zlib1g-dev + libffi-dev: libs comuns usadas por várias wheels
+# Mínimo absoluto para Fase 1: todas as deps Python (asyncpg, psycopg2-binary,
+# pandas, numpy, lxml, orjson, hiredis) têm wheels manylinux2014 para Python 3.11
+# amd64 — não precisamos de build-essential nem -dev libs.
 #
-# `apt-get upgrade` antes do install sincroniza dpkg com o repo e evita
-# "Sub-process dpkg returned error code 1" em libdpkg-perl quando o mirror
-# Debian recebeu update mais novo que a base image python:3.11-slim.
+#   - curl: para o HEALTHCHECK
+#   - ca-certificates: HTTPS ao Open-Meteo
 #
-# Playwright (Fase 2) e WeasyPrint (Fase 3) trazem suas próprias deps de sistema
-# — adicionar aqui quando aquelas fases subirem.
+# Playwright (Fase 2) e WeasyPrint (Fase 3) adicionam suas próprias deps quando vierem.
 RUN apt-get update \
-    && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends \
-        build-essential \
         curl \
         ca-certificates \
-        libpq-dev \
-        libffi-dev \
-        zlib1g-dev \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 

@@ -11,7 +11,7 @@ from datetime import date, timedelta
 from celery.exceptions import SoftTimeLimitExceeded
 from sqlalchemy import select
 
-from app.database import SessionLocal
+from app.database import task_session
 from app.models.dam import Dam
 from app.services.climate import aggregator, open_meteo
 from app.tasks.celery_app import celery_app
@@ -22,7 +22,7 @@ log = get_logger(__name__)
 
 async def _fetch_for_dam(dam_id: int) -> dict[str, int]:
     """Async worker body for fetch_climate_data_for_dam."""
-    async with SessionLocal() as session:
+    async with task_session() as session:
         dam = (
             await session.execute(select(Dam).where(Dam.id == dam_id))
         ).scalar_one_or_none()
@@ -88,7 +88,7 @@ def fetch_climate_data_for_dam(self, dam_id: int) -> dict[str, int]:
 
 
 async def _all_active_dam_ids() -> list[int]:
-    async with SessionLocal() as session:
+    async with task_session() as session:
         result = await session.execute(
             select(Dam.id).where(Dam.is_active.is_(True)).order_by(Dam.id)
         )
@@ -106,7 +106,7 @@ def fetch_all_climate_data() -> dict[str, int]:
 
 
 async def _check_alerts_for_dam(dam_id: int) -> int:
-    async with SessionLocal() as session:
+    async with task_session() as session:
         dam = (
             await session.execute(select(Dam).where(Dam.id == dam_id))
         ).scalar_one_or_none()

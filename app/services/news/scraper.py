@@ -157,6 +157,11 @@ async def _fetch_rss(
     source: NewsSource, queries: list[str], now: datetime
 ) -> list[Article]:
     """Baixa o feed RSS da fonte e filtra por queries + pistas climáticas."""
+    if not source.url_template:
+        # Fonte desabilitada implicitamente (URL vazia = aguardando descobrir
+        # endpoint estável). Mantemos silencioso para não poluir logs.
+        return []
+
     async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
         try:
             resp = await client.get(source.url_template)
@@ -206,6 +211,9 @@ async def _fetch_html_search(
     Import do Playwright é lazy — se o pacote/binário não estiver disponível,
     a fonte é pulada com warning (não derruba a task inteira).
     """
+    if not source.url_template or "{query}" not in source.url_template:
+        return []
+
     try:
         from playwright.async_api import async_playwright  # type: ignore
     except ImportError:

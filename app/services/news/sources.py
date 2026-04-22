@@ -42,15 +42,20 @@ NEWS_SOURCES: list[NewsSource] = [
         key="agencia_brasil",
         name="Agência Brasil",
         strategy="rss",
-        # Feed de "Geral" cobre desastres naturais, enchentes, meio ambiente.
-        url_template="https://agenciabrasil.ebc.com.br/rss/geral/feed.xml",
+        # "últimas notícias" é o feed geral mais estável — cobre desastres
+        # naturais, enchentes, meio ambiente. O antigo `/rss/geral/feed.xml`
+        # devolve HTTP 500; este endpoint é o documentado na página do EBC.
+        url_template="https://agenciabrasil.ebc.com.br/rss/ultimasnoticias/feed",
         max_age_days=30,
     ),
     NewsSource(
         key="mpmg",
         name="MPMG — Ministério Público de MG",
         strategy="rss",
-        url_template="https://www.mpmg.mp.br/rss.xml",
+        # URL histórica (/rss.xml) passou a devolver 404 em 2026. Deixamos
+        # placeholder vazio — a flag news_source_mpmg_enabled começa False.
+        # Substitua por URL atual conhecida e ative o flag se descobrir.
+        url_template="",
         max_age_days=60,
     ),
     # --- HTML search (Playwright) ----------------------------------------------

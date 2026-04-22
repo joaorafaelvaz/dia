@@ -17,7 +17,7 @@ from redis.asyncio import Redis
 from sqlalchemy import and_, select
 
 from app.config import settings
-from app.database import SessionLocal
+from app.database import task_session
 from app.models.dam import Dam
 from app.models.event import ClimateEvent
 from app.services.news import classifier, scraper
@@ -99,79 +99,82 @@ async def _persist_from_article(
 
 async def _scrape_for_dam(dam_id: int) -> dict[str, int]:
     redis = Redis.from_url(settings.redis_url, decode_responses=True)
-    async with SessionLocal() as session:
-        dam = (
-            await session.execute(select(Dam).where(Dam.id == dam_id))
-        ).scalar_one_or_none()
-        if not dam:
-            log.warning("news_dam_not_found", dam_id=dam_id)
-            return {"articles": 0, "created": 0, "updated": 0, "skipped": 0}
-        if not dam.is_active:
-            return {"articles": 0, "created": 0, "updated": 0, "skipped": 0}
+    try:
+        async with task_session() as session:
+            dam = (
+                await session.execute(select(Dam).where(Dam.id == dam_id))
+            ).scalar_one_or_none()
+            if not dam:
+                log.warning("news_dam_not_found", dam_id=dam_id)
+                return {"articles": 0, "created": 0, "updated": 0, "skipped": 0}
+            if not dam.is_active:
+                return {"articles": 0, "created": 0, "updated": 0, "skipped": 0}
 
-        try:
-            articles = await scraper.fetch_articles_for_dam(dam, redis=redis)
-        except Exception as exc:
-            log.error("news_scrape_failed", dam_id=dam_id, error=str(exc))
-            return {"articles": 0, "created": 0, "updated": 0, "skipped": 0}
-
-        created = updated = skipped = 0
-        for art in articles:
             try:
-                cls = await classifier.classify_article(
-                    session=session, redis=redis, article=art, dam=dam
-                )
+                articles = await scraper.fetch_articles_for_dam(dam, redis=redis)
             except Exception as exc:
-                log.warning(
-                    "news_classify_failed",
-                    dam_id=dam_id,
-                    url=art.url,
-                    error=str(exc),
-                )
-                cls = None
+                log.error("news_scrape_failed", dam_id=dam_id, error=str(exc))
+                return {"articles": 0, "created": 0, "updated": 0, "skipped": 0}
 
-            if not cls or not cls.is_relevant():
-                skipped += 1
+            created = updated = skipped = 0
+            for art in articles:
+                try:
+                    cls = await classifier.classify_article(
+                        session=session, redis=redis, article=art, dam=dam
+                    )
+                except Exception as exc:
+                    log.warning(
+                        "news_classify_failed",
+                        dam_id=dam_id,
+                        url=art.url,
+                        error=str(exc),
+                    )
+                    cls = None
+
+                if not cls or not cls.is_relevant():
+                    skipped += 1
+                    await scraper.mark_seen(redis, art.url)
+                    continue
+
+                try:
+                    c, u = await _persist_from_article(session, dam, art, cls)
+                    created += int(c)
+                    updated += int(u)
+                except Exception as exc:
+                    log.error(
+                        "news_persist_failed",
+                        dam_id=dam_id,
+                        url=art.url,
+                        error=str(exc),
+                    )
+                    continue
+
                 await scraper.mark_seen(redis, art.url)
-                continue
 
             try:
-                c, u = await _persist_from_article(session, dam, art, cls)
-                created += int(c)
-                updated += int(u)
+                await session.commit()
             except Exception as exc:
-                log.error(
-                    "news_persist_failed",
-                    dam_id=dam_id,
-                    url=art.url,
-                    error=str(exc),
-                )
-                continue
+                log.error("news_commit_failed", dam_id=dam_id, error=str(exc))
+                await session.rollback()
+                raise
 
-            await scraper.mark_seen(redis, art.url)
-
-        try:
-            await session.commit()
-        except Exception as exc:
-            log.error("news_commit_failed", dam_id=dam_id, error=str(exc))
-            await session.rollback()
-            raise
-
-        log.info(
-            "news_scrape_done",
-            dam_id=dam.id,
-            dam_name=dam.name,
-            articles=len(articles),
-            created=created,
-            updated=updated,
-            skipped=skipped,
-        )
-        return {
-            "articles": len(articles),
-            "created": created,
-            "updated": updated,
-            "skipped": skipped,
-        }
+            log.info(
+                "news_scrape_done",
+                dam_id=dam.id,
+                dam_name=dam.name,
+                articles=len(articles),
+                created=created,
+                updated=updated,
+                skipped=skipped,
+            )
+            return {
+                "articles": len(articles),
+                "created": created,
+                "updated": updated,
+                "skipped": skipped,
+            }
+    finally:
+        await redis.aclose()
 
 
 @celery_app.task(
@@ -193,7 +196,7 @@ def scrape_news_for_dam(self, dam_id: int) -> dict[str, int]:
 
 
 async def _all_active_dam_ids() -> list[int]:
-    async with SessionLocal() as session:
+    async with task_session() as session:
         result = await session.execute(
             select(Dam.id).where(Dam.is_active.is_(True)).order_by(Dam.id)
         )

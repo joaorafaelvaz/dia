@@ -60,11 +60,14 @@ class Settings(BaseSettings):
     alert_email_to: str = ""
 
     # --- News feature flags ---
+    # Default-enabled: fontes com URL estável e comprovadamente funcionando em 2026.
     news_source_g1_enabled: bool = True
     news_source_em_enabled: bool = True
     news_source_agencia_brasil_enabled: bool = True
-    news_source_mpmg_enabled: bool = True
-    news_source_anm_enabled: bool = True
+    # Default-disabled: URLs instáveis / placeholders. Ative manualmente via .env
+    # quando descobrir o endpoint correto.
+    news_source_mpmg_enabled: bool = False
+    news_source_anm_enabled: bool = False
 
     # --- Alert thresholds ---
     alert_rain_mm_24h_moderate: float = 50.0

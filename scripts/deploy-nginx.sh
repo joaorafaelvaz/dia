@@ -32,7 +32,6 @@ set -euo pipefail
 # ------------------------------------------------------------------------------
 SERVICES=(
     "dia.linkwise.digital|8080|25m|flower=5555"
-    "n8n.linkwise.digital|5678|50m|"
     # Adicione mais serviços aqui. Exemplos:
     # "suite.linkwise.digital|8090|10m|"
     # "vipcam.linkwise.digital|8081|100m|"
@@ -128,6 +127,9 @@ render_vhost() {
     local maxbody="$3"
     local extras="$4"          # "flower=5555,grafana=3000" ou vazio
     local conf="/etc/nginx/sites-available/${domain}"
+    local cert_path="/etc/letsencrypt/live/${domain}/fullchain.pem"
+    local has_cert=false
+    [ -f "$cert_path" ] && has_cert=true
 
     log "Escrevendo $conf"
 
@@ -139,50 +141,66 @@ render_vhost() {
         echo "    listen [::]:80;"
         echo "    server_name ${domain};"
         echo ""
-        echo "    # ACME challenge fica em HTTP; resto redireciona para HTTPS."
         echo "    location /.well-known/acme-challenge/ { root /var/www/html; }"
-        echo "    location / { return 301 https://\$host\$request_uri; }"
-        echo "}"
-        echo ""
-        echo "server {"
-        echo "    listen 443 ssl http2;"
-        echo "    listen [::]:443 ssl http2;"
-        echo "    server_name ${domain};"
-        echo ""
-        echo "    # Preenchido pelo certbot --nginx no primeiro apply:"
-        echo "    # ssl_certificate     /etc/letsencrypt/live/${domain}/fullchain.pem;"
-        echo "    # ssl_certificate_key /etc/letsencrypt/live/${domain}/privkey.pem;"
-        echo "    # include             /etc/letsencrypt/options-ssl-nginx.conf;"
-        echo "    # ssl_dhparam         /etc/letsencrypt/ssl-dhparams.pem;"
-        echo ""
-        echo "    client_max_body_size ${maxbody};"
-        echo ""
-        echo "    access_log /var/log/nginx/${domain}.access.log;"
-        echo "    error_log  /var/log/nginx/${domain}.error.log;"
 
-        # Extras: sub-paths adicionais. Ex.: "flower=5555" → /flower/ → :5555
-        if [ -n "$extras" ]; then
-            IFS=',' read -ra EXT <<< "$extras"
-            for pair in "${EXT[@]}"; do
-                local sub="${pair%%=*}"
-                local subport="${pair##*=}"
-                echo ""
-                echo "    location /${sub}/ {"
-                echo "        proxy_pass http://127.0.0.1:${subport}/;"
-                echo "        include    /etc/nginx/snippets/proxy-common.conf;"
-                echo "    }"
-            done
+        if $has_cert; then
+            echo "    location / { return 301 https://\$host\$request_uri; }"
+        else
+            # Sem cert ainda — serve direto em HTTP; certbot adicionará o bloco 443
+            _write_proxy_locations "$port" "$maxbody" "$extras"
         fi
 
-        echo ""
-        echo "    location / {"
-        echo "        proxy_pass http://127.0.0.1:${port};"
-        echo "        include    /etc/nginx/snippets/proxy-common.conf;"
-        echo "    }"
         echo "}"
+
+        if $has_cert; then
+            echo ""
+            echo "server {"
+            echo "    listen 443 ssl http2;"
+            echo "    listen [::]:443 ssl http2;"
+            echo "    server_name ${domain};"
+            echo ""
+            echo "    ssl_certificate     /etc/letsencrypt/live/${domain}/fullchain.pem;"
+            echo "    ssl_certificate_key /etc/letsencrypt/live/${domain}/privkey.pem;"
+            echo "    include             /etc/letsencrypt/options-ssl-nginx.conf;"
+            echo "    ssl_dhparam         /etc/letsencrypt/ssl-dhparams.pem;"
+            echo ""
+            _write_proxy_locations "$port" "$maxbody" "$extras"
+            echo "}"
+        fi
     } > "$conf"
 
     ln -sf "$conf" "/etc/nginx/sites-enabled/${domain}"
+}
+
+_write_proxy_locations() {
+    local port="$1"
+    local maxbody="$2"
+    local extras="$3"
+
+    echo ""
+    echo "    client_max_body_size ${maxbody};"
+    echo ""
+    echo "    access_log /var/log/nginx/\$server_name.access.log;"
+    echo "    error_log  /var/log/nginx/\$server_name.error.log;"
+
+    if [ -n "$extras" ]; then
+        IFS=',' read -ra EXT <<< "$extras"
+        for pair in "${EXT[@]}"; do
+            local sub="${pair%%=*}"
+            local subport="${pair##*=}"
+            echo ""
+            echo "    location /${sub}/ {"
+            echo "        proxy_pass http://127.0.0.1:${subport}/;"
+            echo "        include    /etc/nginx/snippets/proxy-common.conf;"
+            echo "    }"
+        done
+    fi
+
+    echo ""
+    echo "    location / {"
+    echo "        proxy_pass http://127.0.0.1:${port};"
+    echo "        include    /etc/nginx/snippets/proxy-common.conf;"
+    echo "    }"
 }
 
 DOMAINS=()

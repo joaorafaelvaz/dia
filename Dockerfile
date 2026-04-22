@@ -42,6 +42,7 @@ COPY pyproject.toml ./
 RUN uv sync --no-install-project --no-dev
 
 # Copy project source
+COPY README.md ./README.md
 COPY app ./app
 COPY alembic ./alembic
 COPY alembic.ini ./alembic.ini

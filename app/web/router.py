@@ -5,7 +5,7 @@ HTMX partials are served from `/partials/*` for table/card refreshes.
 """
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
@@ -14,6 +14,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
 
 from app.dependencies import AuthUser, SessionDep
+from app.models.ai_usage import AIUsage
 from app.models.alert import Alert
 from app.models.dam import Dam
 from app.models.event import ClimateEvent
@@ -74,13 +75,43 @@ async def _dashboard_context(session) -> dict:
         .all()
     )
 
+    # Custo acumulado de IA nos últimos 30 dias + chamadas
+    cutoff_30d = datetime.now(tz=timezone.utc) - timedelta(days=30)
+    ai_row = (
+        await session.execute(
+            select(
+                func.coalesce(func.sum(AIUsage.cost_usd), 0.0).label("cost"),
+                func.count(AIUsage.id).label("calls"),
+            ).where(AIUsage.created_at >= cutoff_30d)
+        )
+    ).one()
+
+    # Contagem de eventos por source_type (weather vs news) para o card
+    ev_sources = dict(
+        (r.source_type, int(r.n))
+        for r in (
+            await session.execute(
+                select(
+                    ClimateEvent.source_type.label("source_type"),
+                    func.count(ClimateEvent.id).label("n"),
+                )
+                .where(ClimateEvent.event_date >= today - timedelta(days=30))
+                .group_by(ClimateEvent.source_type)
+            )
+        ).all()
+    )
+
     counts = {
         "dams_total": len(dams),
         "dams_active": sum(1 for d in dams if d.is_active),
         "alerts_active": len(active_alerts),
         "alerts_critical": sum(1 for a in active_alerts if a.severity >= 4),
         "events_30d": len(recent_events),
+        "events_weather_30d": ev_sources.get("weather", 0),
+        "events_news_30d": ev_sources.get("news", 0),
         "forecasts_high_risk": len(upcoming_forecasts),
+        "ai_cost_30d": float(ai_row.cost or 0.0),
+        "ai_calls_30d": int(ai_row.calls or 0),
     }
 
     dams_by_id = {d.id: d for d in dams}

@@ -15,18 +15,24 @@ ENV PYTHONUNBUFFERED=1 \
     UV_COMPILE_BYTECODE=1 \
     PATH="/app/.venv/bin:$PATH"
 
-# Mínimo absoluto para Fase 1: todas as deps Python (asyncpg, psycopg2-binary,
-# pandas, numpy, lxml, orjson, hiredis) têm wheels manylinux2014 para Python 3.11
-# amd64 — não precisamos de build-essential nem -dev libs.
+# Fase 1: Python deps (asyncpg, pandas, numpy, lxml, orjson, hiredis) têm wheels
+# manylinux2014 para Python 3.11 amd64.
 #
-#   - curl: para o HEALTHCHECK
-#   - ca-certificates: HTTPS ao Open-Meteo
+# Fase 2: Playwright/Chromium headless precisa de libs nativas (nss, atk, libx11,
+# libxcomposite, libxdamage, libxrandr, libgbm, libasound2, libpango, libcairo).
+# Em vez de listar tudo na mão, instalamos chromium via `playwright install
+# --with-deps` mais abaixo, depois que o pacote Python playwright estiver
+# instalado no venv.
 #
-# Playwright (Fase 2) e WeasyPrint (Fase 3) adicionam suas próprias deps quando vierem.
+#   - curl: HEALTHCHECK + debugging
+#   - ca-certificates: HTTPS ao Open-Meteo / news sources
+#   - fonts-liberation + fontconfig: evita squares em páginas renderizadas
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         curl \
         ca-certificates \
+        fonts-liberation \
+        fontconfig \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -50,6 +56,17 @@ COPY scripts ./scripts
 
 # Sync again to install the project itself
 RUN uv sync --no-dev
+
+# Playwright + Chromium (Fase 2 — news scraping)
+# `playwright install --with-deps chromium` baixa o browser e instala as libs
+# nativas via apt. Fazemos isso APÓS o `uv sync` para que o pacote Python
+# `playwright` já esteja no venv. Cleanup das listas apt depois.
+#
+# PLAYWRIGHT_BROWSERS_PATH=/ms-playwright mantém os browsers em caminho
+# previsível (necessário em multi-stage futuro).
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN uv run playwright install --with-deps chromium \
+    && rm -rf /var/lib/apt/lists/*
 
 # Default port for API service
 EXPOSE 8000

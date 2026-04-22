@@ -27,7 +27,21 @@
           {% if dam %}<a class="text-brand hover:underline" href="/dams/{{ dam.id }}">{{ dam.name }}</a>{% else %}#{{ ev.dam_id }}{% endif %}
         </td>
         <td class="px-4 py-2">{{ ev.event_type }}</td>
-        <td class="px-4 py-2"><span class="rounded bg-slate-800 px-2 py-0.5 text-xs">{{ ev.source_type }}</span></td>
+        <td class="px-4 py-2">
+          {% if ev.source_type == "news" %}
+            <span class="inline-flex items-center gap-1 rounded bg-indigo-900/60 px-2 py-0.5 text-xs text-indigo-200" title="Classificado por Claude Haiku a partir de notícia">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path d="M2 5a2 2 0 012-2h8a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm3 2a1 1 0 000 2h6a1 1 0 100-2H5zm0 3a1 1 0 100 2h6a1 1 0 100-2H5zm0 3a1 1 0 100 2h3a1 1 0 100-2H5zM15 7h1a1 1 0 011 1v7a1 1 0 11-2 0V7z"/></svg>
+              news
+            </span>
+          {% elif ev.source_type == "weather" %}
+            <span class="inline-flex items-center gap-1 rounded bg-sky-900/60 px-2 py-0.5 text-xs text-sky-200" title="Open-Meteo / histórico">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path d="M5.5 16a4.5 4.5 0 01-.45-8.977A6 6 0 0116.23 8.5a3.5 3.5 0 01-.73 6.5H5.5z"/></svg>
+              clima
+            </span>
+          {% else %}
+            <span class="rounded bg-slate-800 px-2 py-0.5 text-xs">{{ ev.source_type }}</span>
+          {% endif %}
+        </td>
         <td class="px-4 py-2 text-right">{% if ev.precipitation_mm %}{{ "%.1f"|format(ev.precipitation_mm) }} mm{% else %}-{% endif %}</td>
         <td class="px-4 py-2 text-right">
           <span class="inline-block rounded px-2 py-0.5 text-xs font-semibold

@@ -53,6 +53,10 @@ celery_app.conf.update(
             "task": "app.tasks.climate_tasks.check_all_alerts",
             "schedule": _parse_cron(settings.schedule_alert_check),
         },
+        "scrape-news": {
+            "task": "app.tasks.news_tasks.scrape_all_news",
+            "schedule": _parse_cron(settings.schedule_news_scrape),
+        },
     },
 )
 
@@ -61,5 +65,6 @@ celery_app.autodiscover_tasks(["app.tasks"])
 
 # Explicit imports so worker registers tasks at startup
 import app.tasks.climate_tasks  # noqa: E402, F401
+import app.tasks.news_tasks  # noqa: E402, F401
 
 __all__ = ["celery_app"]

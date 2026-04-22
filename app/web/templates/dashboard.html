@@ -6,13 +6,23 @@
     <h1 class="text-2xl font-semibold">Dashboard</h1>
     <p class="text-sm text-slate-400">Última atualização {{ now.strftime("%d/%m/%Y %H:%M") }} UTC</p>
   </div>
-  <button
-    class="rounded bg-brand px-3 py-1.5 text-sm font-medium hover:bg-brand-dark disabled:opacity-50 disabled:cursor-wait"
-    hx-post="/api/v1/tasks/run/fetch_all_climate_data"
-    hx-swap="none"
-    hx-disabled-elt="this"
-    hx-confirm="Disparar coleta Open-Meteo para todas as barragens ativas?"
-  >Coletar agora</button>
+  <div class="flex items-center gap-2">
+    <button
+      class="rounded bg-brand px-3 py-1.5 text-sm font-medium hover:bg-brand-dark disabled:opacity-50 disabled:cursor-wait"
+      hx-post="/api/v1/tasks/run/fetch_all_climate_data"
+      hx-swap="none"
+      hx-disabled-elt="this"
+      hx-confirm="Disparar coleta Open-Meteo para todas as barragens ativas?"
+    >Coletar clima</button>
+    <button
+      class="rounded border border-indigo-700 bg-indigo-900/40 px-3 py-1.5 text-sm font-medium text-indigo-100 hover:bg-indigo-900/60 disabled:opacity-50 disabled:cursor-wait"
+      hx-post="/api/v1/tasks/run/scrape_all_news"
+      hx-swap="none"
+      hx-disabled-elt="this"
+      hx-confirm="Disparar scraping de notícias + classificação Claude Haiku para todas as barragens ativas? (pode gerar custo de IA)"
+      title="Playwright scrape + Claude Haiku classification"
+    >Coletar notícias</button>
+  </div>
 </div>
 
 <section

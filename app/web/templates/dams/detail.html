@@ -11,12 +11,22 @@
       {{ dam.owner_group }} · {{ dam.municipality }}/{{ dam.state }} · {{ dam.dam_type }}
     </p>
   </div>
-  <button
-    class="rounded bg-brand px-3 py-1.5 text-sm font-medium hover:bg-brand-dark disabled:opacity-50 disabled:cursor-wait"
-    hx-post="/api/v1/tasks/run/fetch_climate_data_for_dam/{{ dam.id }}"
-    hx-swap="none"
-    hx-disabled-elt="this"
-  >Atualizar clima</button>
+  <div class="flex items-center gap-2">
+    <button
+      class="rounded bg-brand px-3 py-1.5 text-sm font-medium hover:bg-brand-dark disabled:opacity-50 disabled:cursor-wait"
+      hx-post="/api/v1/tasks/run/fetch_climate_data_for_dam/{{ dam.id }}"
+      hx-swap="none"
+      hx-disabled-elt="this"
+    >Atualizar clima</button>
+    <button
+      class="rounded border border-indigo-700 bg-indigo-900/40 px-3 py-1.5 text-sm font-medium text-indigo-100 hover:bg-indigo-900/60 disabled:opacity-50 disabled:cursor-wait"
+      hx-post="/api/v1/tasks/run/scrape_news_for_dam/{{ dam.id }}"
+      hx-swap="none"
+      hx-disabled-elt="this"
+      hx-confirm="Disparar scraping de notícias para esta barragem? (Haiku classificará cada artigo — custo de IA)"
+      title="Playwright scrape + Claude Haiku"
+    >Coletar notícias</button>
+  </div>
 </div>
 
 <div class="grid gap-4 md:grid-cols-4">
@@ -75,8 +85,15 @@
     <ul class="space-y-2">
       {% for ev in events %}
       <li class="rounded border border-slate-800 p-2 text-sm">
-        <div class="flex items-center justify-between">
-          <span class="text-xs text-slate-400">{{ ev.event_date.strftime("%d/%m/%Y") }} · {{ ev.event_type }}</span>
+        <div class="flex items-center justify-between gap-2">
+          <span class="flex items-center gap-2 text-xs text-slate-400">
+            {{ ev.event_date.strftime("%d/%m/%Y") }} · {{ ev.event_type }}
+            {% if ev.source_type == "news" %}
+              <span class="rounded bg-indigo-900/60 px-1.5 py-0.5 text-[10px] text-indigo-200" title="Classificado por Claude Haiku a partir de notícia">news</span>
+            {% elif ev.source_type == "weather" %}
+              <span class="rounded bg-sky-900/60 px-1.5 py-0.5 text-[10px] text-sky-200" title="Open-Meteo">clima</span>
+            {% endif %}
+          </span>
           <span class="rounded px-2 py-0.5 text-xs font-semibold
             {% if ev.severity >= 5 %}bg-red-600
             {% elif ev.severity == 4 %}bg-orange-500
@@ -85,6 +102,9 @@
         </div>
         <div class="mt-1 font-medium">{{ ev.title }}</div>
         <div class="text-xs text-slate-400">{{ ev.description }}</div>
+        {% if ev.ai_analysis and ev.source_type == "news" %}
+          <div class="mt-1 text-xs text-indigo-300/80 italic">IA: {{ ev.ai_analysis }}</div>
+        {% endif %}
       </li>
       {% else %}
       <li class="py-4 text-center text-sm text-slate-500">Nenhum evento registrado.</li>

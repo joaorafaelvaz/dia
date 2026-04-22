@@ -39,8 +39,8 @@ logs/
 # Alembic
 alembic/versions/__pycache__/
 
-# Reports output
-reports/
+# Reports output (volume mount, não confundir com app/services/reports)
+/reports/
 *.pdf
 
 # Playwright

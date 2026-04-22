@@ -57,6 +57,14 @@ celery_app.conf.update(
             "task": "app.tasks.news_tasks.scrape_all_news",
             "schedule": _parse_cron(settings.schedule_news_scrape),
         },
+        "generate-weekly-briefing": {
+            "task": "app.tasks.report_tasks.generate_weekly_briefing",
+            "schedule": _parse_cron(settings.schedule_report_briefing),
+        },
+        "generate-monthly-client-reports": {
+            "task": "app.tasks.report_tasks.generate_monthly_client_reports",
+            "schedule": _parse_cron(settings.schedule_report_client),
+        },
     },
 )
 
@@ -66,5 +74,6 @@ celery_app.autodiscover_tasks(["app.tasks"])
 # Explicit imports so worker registers tasks at startup
 import app.tasks.climate_tasks  # noqa: E402, F401
 import app.tasks.news_tasks  # noqa: E402, F401
+import app.tasks.report_tasks  # noqa: E402, F401
 
 __all__ = ["celery_app"]

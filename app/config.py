@@ -63,11 +63,20 @@ class Settings(BaseSettings):
     # Default-enabled: fontes com URL estável e comprovadamente funcionando em 2026.
     news_source_g1_enabled: bool = True
     news_source_em_enabled: bool = True
-    news_source_agencia_brasil_enabled: bool = True
-    # Default-disabled: URLs instáveis / placeholders. Ative manualmente via .env
-    # quando descobrir o endpoint correto.
+    # Default-disabled: URLs instáveis / placeholders / backend quebrado.
+    # Ative manualmente via .env quando descobrir o endpoint correto.
+    #   - agencia_brasil: HTTP 500 em todos os endpoints testados
+    #   - mpmg: /rss.xml responde 404 (histórico descontinuado)
+    #   - anm: sem busca pública estável
+    news_source_agencia_brasil_enabled: bool = False
     news_source_mpmg_enabled: bool = False
     news_source_anm_enabled: bool = False
+
+    # --- News scraper diagnostics ---
+    # Quando ativo, o HTML scraper loga contagens de cards brutos + até 3 títulos
+    # por query. Usar em troubleshooting ("por que candidates=0?"); desligar
+    # em produção para reduzir volume de log.
+    news_scraper_debug: bool = False
 
     # --- Alert thresholds ---
     alert_rain_mm_24h_moderate: float = 50.0

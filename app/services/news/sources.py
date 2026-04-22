@@ -42,10 +42,11 @@ NEWS_SOURCES: list[NewsSource] = [
         key="agencia_brasil",
         name="Agência Brasil",
         strategy="rss",
-        # "últimas notícias" é o feed geral mais estável — cobre desastres
-        # naturais, enchentes, meio ambiente. O antigo `/rss/geral/feed.xml`
-        # devolve HTTP 500; este endpoint é o documentado na página do EBC.
-        url_template="https://agenciabrasil.ebc.com.br/rss/ultimasnoticias/feed",
+        # EBC tem devolvido HTTP 500 consistente em todos os endpoints RSS
+        # testados (/rss/geral, /rss/ultimasnoticias) — backend quebrado em
+        # 2026-04. Mantemos placeholder + flag default False. Reative quando
+        # um endpoint voltar a responder 200.
+        url_template="",
         max_age_days=30,
     ),
     NewsSource(

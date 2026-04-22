@@ -237,6 +237,13 @@ async def _fetch_html_search(
                 for q in queries:
                     page = await context.new_page()
                     url = source.url_template.format(query=quote_plus(q))
+                    # Counters para diagnóstico por query
+                    raw_cards = 0
+                    empty_title = 0
+                    bad_href = 0
+                    no_climate_hint = 0
+                    kept = 0
+                    sample_titles: list[str] = []
                     try:
                         await page.goto(url, wait_until="domcontentloaded", timeout=20000)
                         if source.ready_selector:
@@ -250,17 +257,25 @@ async def _fetch_html_search(
 
                         card_sel = source.card_selector or "article"
                         cards = await page.query_selector_all(card_sel)
+                        raw_cards = len(cards)
                         for card in cards[:10]:  # limita 10 por query/fonte
                             title_el = await card.query_selector("a, h2, h3")
                             if not title_el:
+                                empty_title += 1
                                 continue
                             title = (await title_el.inner_text()).strip()
+                            if not title:
+                                empty_title += 1
+                                continue
+                            if len(sample_titles) < 3:
+                                sample_titles.append(title[:80])
                             href = await title_el.get_attribute("href") or ""
                             if href.startswith("/"):
                                 base = re.match(r"(https?://[^/]+)", url)
                                 if base:
                                     href = base.group(1) + href
                             if not href.startswith("http"):
+                                bad_href += 1
                                 continue
                             lead_el = await card.query_selector("p")
                             lead = (await lead_el.inner_text()).strip() if lead_el else ""
@@ -275,8 +290,10 @@ async def _fetch_html_search(
                                 raw={},
                             )
                             if not _has_climate_hint(art):
+                                no_climate_hint += 1
                                 continue
                             articles.append(art)
+                            kept += 1
                     except Exception as exc:
                         log.warning(
                             "news_html_page_failed",
@@ -285,6 +302,19 @@ async def _fetch_html_search(
                             error=str(exc),
                         )
                     finally:
+                        if settings.news_scraper_debug:
+                            log.info(
+                                "news_html_query_debug",
+                                source=source.key,
+                                query=q,
+                                url=url,
+                                raw_cards=raw_cards,
+                                empty_title=empty_title,
+                                bad_href=bad_href,
+                                no_climate_hint=no_climate_hint,
+                                kept=kept,
+                                sample_titles=sample_titles,
+                            )
                         await page.close()
             finally:
                 await browser.close()

@@ -9,7 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import get_session
 
-_security = HTTPBasic()
+# `realm` vira parte do header WWW-Authenticate e é o que alguns browsers usam
+# como pista para exibir/agrupar o prompt de login. Sem realm, navegadores
+# recentes (Chrome/Edge) ocasionalmente suprimem o prompt em fetch/HTMX.
+_security = HTTPBasic(realm="DIA")
 
 
 def require_basic_auth(
@@ -28,7 +31,7 @@ def require_basic_auth(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",
-            headers={"WWW-Authenticate": "Basic"},
+            headers={"WWW-Authenticate": 'Basic realm="DIA"'},
         )
     return credentials.username
 

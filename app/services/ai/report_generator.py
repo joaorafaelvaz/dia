@@ -258,7 +258,8 @@ async def generate_briefing(
         prompt=prompt,
         model=model or settings.claude_model_reports,
         max_tokens=max_tokens or settings.claude_max_tokens_report,
-        temperature=0.3,
+        # Opus 4.7 deprecou `temperature` — omitimos explicitamente.
+        temperature=None,
     )
     html = _markdown_to_html(md)
     log.info(
@@ -292,7 +293,8 @@ async def generate_client_report(
         prompt=prompt,
         model=model or settings.claude_model_reports,
         max_tokens=max_tokens or settings.claude_max_tokens_report,
-        temperature=0.3,
+        # Opus 4.7 deprecou `temperature` — omitimos explicitamente.
+        temperature=None,
     )
     html = _markdown_to_html(md)
     log.info(

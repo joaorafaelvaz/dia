@@ -45,7 +45,7 @@ async def complete(
     prompt: str,
     model: str | None = None,
     max_tokens: int = 1024,
-    temperature: float = 0.2,
+    temperature: float | None = 0.2,
     extra_messages: Iterable[MessageParam] | None = None,
 ) -> str:
     """Executa uma chamada ao Claude e grava uso em ai_usage.
@@ -56,7 +56,10 @@ async def complete(
         system: prompt de sistema.
         prompt: primeira mensagem do usuário.
         model: override; se None usa `settings.claude_model_classify` por default.
-        max_tokens, temperature: passados direto à API.
+        max_tokens: passado direto à API.
+        temperature: se `None`, omitimos o parâmetro da chamada — Opus 4.7+
+            deprecou `temperature` e qualquer valor dispara 400. Mantemos
+            default 0.2 para Haiku (classificação) onde ainda é aceito.
         extra_messages: mensagens adicionais (para few-shot).
 
     Returns:
@@ -75,14 +78,19 @@ async def complete(
     t0 = time.perf_counter()
     usage = AIUsage(model=model, caller=caller)
 
+    # Monta kwargs dinamicamente para poder omitir `temperature` quando None
+    # (Opus 4.7 deprecou o parâmetro e rejeita com 400).
+    create_kwargs: dict = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "system": system,
+        "messages": messages,
+    }
+    if temperature is not None:
+        create_kwargs["temperature"] = temperature
+
     try:
-        msg = await client.messages.create(
-            model=model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            system=system,
-            messages=messages,
-        )
+        msg = await client.messages.create(**create_kwargs)
         usage.input_tokens = msg.usage.input_tokens
         usage.output_tokens = msg.usage.output_tokens
         usage.cost_usd = compute_cost_usd(

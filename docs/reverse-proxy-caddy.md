@@ -7,9 +7,10 @@ com TLS automático via Let's Encrypt.
 
 1. **DNS**: criar registro A em `linkwise.digital`:
    ```
-   dia    A    <IP público do servidor bvip>
+   dia    A    201.22.86.97
    ```
-2. **Firewall**: portas 80 e 443 abertas no servidor.
+   (IP público do servidor bvip)
+2. **Firewall**: portas 80 e 443 abertas no servidor (`sudo ufw allow 80,443/tcp`).
 3. **Caddy** já instalado no host (não dentro do Docker do DIA).
 
 ## Caddyfile

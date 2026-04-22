@@ -13,7 +13,10 @@ pode fazer polling em `GET /{id}` e mostrar spinner enquanto
 """
 from __future__ import annotations
 
+import re
+import unicodedata
 from datetime import date, datetime, timedelta, timezone
+from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException, Query, Response, status
 from fastapi.responses import PlainTextResponse
@@ -156,13 +159,26 @@ async def get_report_pdf(
             detail=f"Relatório com status '{report.status}' ainda não disponível",
         )
     pdf_bytes = render_report_pdf(report)
-    safe_title = (report.title or f"report-{report.id}").replace('"', "")
-    filename = f"{safe_title[:80]}.pdf".replace(" ", "_")
+    raw_title = report.title or f"report-{report.id}"
+
+    # ASCII fallback para clientes HTTP/1.0 antigos e pra satisfazer latin-1 do
+    # starlette. Normaliza unicode (NFKD → remove diacríticos), troca
+    # não-ASCII/espaço/aspa por "_", corta em 80. Dá filename sempre seguro.
+    ascii_title = unicodedata.normalize("NFKD", raw_title).encode("ascii", "ignore").decode("ascii")
+    ascii_title = re.sub(r'[^A-Za-z0-9._-]+', "_", ascii_title).strip("_") or f"report-{report.id}"
+    ascii_filename = f"{ascii_title[:80]}.pdf"
+
+    # UTF-8 filename via RFC 5987 (filename*) — navegadores modernos usam esse.
+    utf8_filename = quote(f"{raw_title[:80]}.pdf", safe="")
+
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
         headers={
-            "Content-Disposition": f'inline; filename="{filename}"',
+            "Content-Disposition": (
+                f'inline; filename="{ascii_filename}"; '
+                f"filename*=UTF-8''{utf8_filename}"
+            ),
         },
     )
 

@@ -76,4 +76,61 @@
 
   window.initDiaMap = init;
   document.addEventListener("DOMContentLoaded", init);
+
+  // ---------- HTMX toast feedback ----------
+  // Fornece retorno visual para botões com hx-post (ex.: "Coletar agora",
+  // "Atualizar clima"). Sem isso, hx-swap="none" faz parecer que nada rolou.
+  function toast(message, kind) {
+    const host = document.getElementById("dia-toasts");
+    if (!host) return;
+    const palette = {
+      ok: "bg-emerald-600 border-emerald-400",
+      err: "bg-rose-600 border-rose-400",
+      info: "bg-sky-600 border-sky-400",
+    };
+    const el = document.createElement("div");
+    el.className =
+      "rounded border px-3 py-2 text-sm text-white shadow transition-opacity duration-300 " +
+      (palette[kind] || palette.info);
+    el.textContent = message;
+    host.appendChild(el);
+    setTimeout(() => {
+      el.style.opacity = "0";
+      setTimeout(() => el.remove(), 400);
+    }, 3500);
+  }
+
+  document.body.addEventListener("htmx:afterRequest", function (evt) {
+    const xhr = evt.detail.xhr;
+    const req = evt.detail.requestConfig || {};
+    // Ignorar GETs (partials/counters, alerts) — só interessa POST explícito.
+    if ((req.verb || "").toLowerCase() !== "post") return;
+
+    const path = req.path || "";
+    if (xhr.status >= 200 && xhr.status < 300) {
+      let label = "Tarefa enfileirada";
+      try {
+        const data = JSON.parse(xhr.responseText || "{}");
+        if (data.task && data.task_id) {
+          label = data.task + " · id " + String(data.task_id).slice(0, 8);
+        }
+      } catch (_) {}
+      toast("✓ " + label, "ok");
+    } else {
+      toast(
+        "✗ Erro " + xhr.status + " em " + path +
+          (xhr.responseText ? " — " + xhr.responseText.slice(0, 120) : ""),
+        "err"
+      );
+    }
+  });
+
+  document.body.addEventListener("htmx:sendError", function () {
+    toast("✗ Falha de rede", "err");
+  });
+
+  document.body.addEventListener("htmx:responseError", function (evt) {
+    const xhr = evt.detail.xhr;
+    toast("✗ Erro HTTP " + xhr.status, "err");
+  });
 })();

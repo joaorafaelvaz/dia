@@ -7,9 +7,10 @@
     <p class="text-sm text-slate-400">Última atualização {{ now.strftime("%d/%m/%Y %H:%M") }} UTC</p>
   </div>
   <button
-    class="rounded bg-brand px-3 py-1.5 text-sm font-medium hover:bg-brand-dark"
+    class="rounded bg-brand px-3 py-1.5 text-sm font-medium hover:bg-brand-dark disabled:opacity-50 disabled:cursor-wait"
     hx-post="/api/v1/tasks/run/fetch_all_climate_data"
     hx-swap="none"
+    hx-disabled-elt="this"
     hx-confirm="Disparar coleta Open-Meteo para todas as barragens ativas?"
   >Coletar agora</button>
 </div>

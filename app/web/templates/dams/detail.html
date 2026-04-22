@@ -12,9 +12,10 @@
     </p>
   </div>
   <button
-    class="rounded bg-brand px-3 py-1.5 text-sm font-medium hover:bg-brand-dark"
+    class="rounded bg-brand px-3 py-1.5 text-sm font-medium hover:bg-brand-dark disabled:opacity-50 disabled:cursor-wait"
     hx-post="/api/v1/tasks/run/fetch_climate_data_for_dam/{{ dam.id }}"
     hx-swap="none"
+    hx-disabled-elt="this"
   >Atualizar clima</button>
 </div>
 

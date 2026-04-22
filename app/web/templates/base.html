@@ -54,6 +54,10 @@
       {% block content %}{% endblock %}
     </main>
   </div>
+
+  <!-- Toasts (HTMX feedback) -->
+  <div id="dia-toasts" class="fixed bottom-4 right-4 z-50 flex max-w-sm flex-col gap-2"></div>
+
   <script src="/static/js/app.js"></script>
   {% block scripts %}{% endblock %}
 </body>

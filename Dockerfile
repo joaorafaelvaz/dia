@@ -43,9 +43,13 @@ ENV PYTHONUNBUFFERED=1 \
 #   libxrandr2           → X randr extension
 #   libasound2           → áudio (stub, mas o binário linka)
 #   libatspi2.0-0        → acessibilidade GTK
-#   libpango-1.0-0       → renderização de texto
-#   libcairo2            → renderização 2D
+#   libpango-1.0-0       → renderização de texto (Chromium + WeasyPrint)
+#   libpangoft2-1.0-0    → WeasyPrint (binding FreeType↔Pango, obrigatório)
+#   libharfbuzz0b        → shaping de texto (WeasyPrint via Pango)
+#   libcairo2            → renderização 2D (Chromium + WeasyPrint)
+#   libgdk-pixbuf-2.0-0  → WeasyPrint (imagens PNG/JPEG em relatórios)
 #   libxshmfence1        → sincronização GPU / drm
+#   shared-mime-info     → detecção de MIME (WeasyPrint resolve imagens)
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         curl \
@@ -67,8 +71,12 @@ RUN apt-get update \
         libasound2 \
         libatspi2.0-0 \
         libpango-1.0-0 \
+        libpangoft2-1.0-0 \
+        libharfbuzz0b \
         libcairo2 \
+        libgdk-pixbuf-2.0-0 \
         libxshmfence1 \
+        shared-mime-info \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 

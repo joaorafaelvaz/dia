@@ -1,0 +1,60 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+
+# Virtual env
+.venv/
+venv/
+env/
+
+# uv
+.uv/
+uv.lock
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Env files
+.env
+.env.local
+.env.*.local
+docker-compose.override.yml
+
+# Logs
+*.log
+logs/
+
+# Alembic
+alembic/versions/__pycache__/
+
+# Reports output
+reports/
+*.pdf
+
+# Playwright
+playwright-report/
+test-results/
+.playwright/
+
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Data
+*.sqlite
+*.db
+postgres_data/
+redis_data/

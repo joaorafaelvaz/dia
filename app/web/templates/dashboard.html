@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}Dashboard · DIA{% endblock %}
+{% block content %}
+<div class="mb-6 flex items-center justify-between">
+  <div>
+    <h1 class="text-2xl font-semibold">Dashboard</h1>
+    <p class="text-sm text-slate-400">Última atualização {{ now.strftime("%d/%m/%Y %H:%M") }} UTC</p>
+  </div>
+  <button
+    class="rounded bg-brand px-3 py-1.5 text-sm font-medium hover:bg-brand-dark"
+    hx-post="/api/v1/tasks/run/fetch_all_climate_data"
+    hx-swap="none"
+    hx-confirm="Disparar coleta Open-Meteo para todas as barragens ativas?"
+  >Coletar agora</button>
+</div>
+
+<section
+  id="counters"
+  class="grid grid-cols-2 gap-4 md:grid-cols-6"
+  hx-get="/partials/counters"
+  hx-trigger="every 60s"
+  hx-swap="innerHTML"
+>
+  {% include "partials/counters.html" %}
+</section>
+
+<div class="mt-6 grid gap-6 lg:grid-cols-3">
+  <section class="lg:col-span-2 rounded-lg border border-slate-800 bg-slate-900 p-4">
+    <h2 class="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-400">Mapa das barragens</h2>
+    <div id="map" class="h-[420px] w-full rounded"></div>
+  </section>
+
+  <section class="rounded-lg border border-slate-800 bg-slate-900 p-4">
+    <h2 class="mb-3 flex items-center justify-between text-sm font-semibold uppercase tracking-wider text-slate-400">
+      <span>Alertas ativos</span>
+      <span class="text-xs normal-case text-slate-500">auto 60s</span>
+    </h2>
+    <div
+      id="alerts-panel"
+      hx-get="/partials/alerts"
+      hx-trigger="every 60s"
+      hx-swap="innerHTML"
+    >
+      {% include "partials/alerts.html" %}
+    </div>
+  </section>
+</div>
+
+<div class="mt-6 grid gap-6 lg:grid-cols-2">
+  <section class="rounded-lg border border-slate-800 bg-slate-900 p-4">
+    <h2 class="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-400">Previsões de alto risco (7d)</h2>
+    <table class="w-full text-sm">
+      <thead class="text-xs uppercase text-slate-500">
+        <tr>
+          <th class="py-2 text-left">Data</th>
+          <th class="py-2 text-left">Barragem</th>
+          <th class="py-2 text-right">mm</th>
+          <th class="py-2 text-right">Risco</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-800">
+        {% for fc in upcoming_forecasts %}
+        <tr>
+          <td class="py-2">{{ fc.forecast_date.strftime("%d/%m") }}</td>
+          <td class="py-2">
+            {% set dam = dams_by_id.get(fc.dam_id) %}
+            {% if dam %}<a class="text-brand hover:underline" href="/dams/{{ dam.id }}">{{ dam.name }}</a>{% else %}#{{ fc.dam_id }}{% endif %}
+          </td>
+          <td class="py-2 text-right">{{ "%.1f"|format(fc.max_precipitation_mm or 0) }}</td>
+          <td class="py-2 text-right">
+            <span class="inline-block rounded px-2 py-0.5 text-xs font-semibold
+              {% if fc.risk_level >= 5 %}bg-red-600
+              {% elif fc.risk_level == 4 %}bg-orange-500
+              {% elif fc.risk_level == 3 %}bg-yellow-500 text-slate-900
+              {% else %}bg-slate-700{% endif %}">{{ fc.risk_label }}</span>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="py-4 text-center text-slate-500">Nenhuma previsão de alto risco no horizonte.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="rounded-lg border border-slate-800 bg-slate-900 p-4">
+    <h2 class="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-400">Eventos recentes (30d)</h2>
+    <table class="w-full text-sm">
+      <thead class="text-xs uppercase text-slate-500">
+        <tr>
+          <th class="py-2 text-left">Data</th>
+          <th class="py-2 text-left">Barragem</th>
+          <th class="py-2 text-left">Tipo</th>
+          <th class="py-2 text-right">Sev</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-800">
+        {% for ev in recent_events %}
+        <tr>
+          <td class="py-2">{{ ev.event_date.strftime("%d/%m") }}</td>
+          <td class="py-2">
+            {% set dam = dams_by_id.get(ev.dam_id) %}
+            {% if dam %}<a class="text-brand hover:underline" href="/dams/{{ dam.id }}">{{ dam.name }}</a>{% else %}#{{ ev.dam_id }}{% endif %}
+          </td>
+          <td class="py-2">{{ ev.event_type }}</td>
+          <td class="py-2 text-right">{{ ev.severity }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="py-4 text-center text-slate-500">Nenhum evento nos últimos 30 dias.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.DIA_DAMS = [
+    {% for dam in dams %}
+    {
+      id: {{ dam.id }},
+      name: {{ dam.name|tojson }},
+      owner: {{ dam.owner_group|tojson }},
+      municipality: {{ dam.municipality|tojson }},
+      state: {{ dam.state|tojson }},
+      lat: {{ dam.latitude }},
+      lon: {{ dam.longitude }},
+      active: {{ 'true' if dam.is_active else 'false' }}
+    }{{ "," if not loop.last }}
+    {% endfor %}
+  ];
+  if (window.initDiaMap) window.initDiaMap();
+</script>
+{% endblock %}

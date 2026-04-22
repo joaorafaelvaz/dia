@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}{{ dam.name }} · DIA{% endblock %}
+{% block content %}
+<div class="mb-4">
+  <a class="text-xs text-slate-400 hover:underline" href="/dams">← Barragens</a>
+</div>
+<div class="mb-6 flex items-start justify-between">
+  <div>
+    <h1 class="text-2xl font-semibold">{{ dam.name }}</h1>
+    <p class="text-sm text-slate-400">
+      {{ dam.owner_group }} · {{ dam.municipality }}/{{ dam.state }} · {{ dam.dam_type }}
+    </p>
+  </div>
+  <button
+    class="rounded bg-brand px-3 py-1.5 text-sm font-medium hover:bg-brand-dark"
+    hx-post="/api/v1/tasks/run/fetch_climate_data_for_dam/{{ dam.id }}"
+    hx-swap="none"
+  >Atualizar clima</button>
+</div>
+
+<div class="grid gap-4 md:grid-cols-4">
+  <div class="rounded border border-slate-800 bg-slate-900 p-3">
+    <div class="text-xs uppercase text-slate-500">ANM</div>
+    <div class="text-lg">{{ dam.anm_classification or "-" }}</div>
+  </div>
+  <div class="rounded border border-slate-800 bg-slate-900 p-3">
+    <div class="text-xs uppercase text-slate-500">CRI</div>
+    <div class="text-lg">{{ dam.cri or "-" }}</div>
+  </div>
+  <div class="rounded border border-slate-800 bg-slate-900 p-3">
+    <div class="text-xs uppercase text-slate-500">DPA</div>
+    <div class="text-lg">{{ dam.dpa or "-" }}</div>
+  </div>
+  <div class="rounded border border-slate-800 bg-slate-900 p-3">
+    <div class="text-xs uppercase text-slate-500">Capacidade</div>
+    <div class="text-lg">{% if dam.capacity_m3 %}{{ "{:,.0f}".format(dam.capacity_m3) }} m³{% else %}-{% endif %}</div>
+  </div>
+</div>
+
+{% if dam.notes %}
+<p class="mt-4 rounded border border-slate-800 bg-slate-900/60 p-3 text-sm text-slate-300">{{ dam.notes }}</p>
+{% endif %}
+
+<div class="mt-6 grid gap-6 lg:grid-cols-2">
+  <section class="rounded-lg border border-slate-800 bg-slate-900 p-4">
+    <h2 class="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-400">Previsões (16d)</h2>
+    <table class="w-full text-sm">
+      <thead class="text-xs uppercase text-slate-500">
+        <tr><th class="py-2 text-left">Data</th><th class="py-2 text-right">Precip.</th><th class="py-2 text-right">Temp</th><th class="py-2 text-right">Risco</th></tr>
+      </thead>
+      <tbody class="divide-y divide-slate-800">
+        {% for fc in forecasts %}
+        <tr>
+          <td class="py-2">{{ fc.forecast_date.strftime("%d/%m") }}</td>
+          <td class="py-2 text-right">{{ "%.1f"|format(fc.max_precipitation_mm or 0) }} mm</td>
+          <td class="py-2 text-right">{% if fc.max_temperature_c is not none %}{{ "%.0f"|format(fc.max_temperature_c) }}°{% else %}-{% endif %}</td>
+          <td class="py-2 text-right">
+            <span class="inline-block rounded px-2 py-0.5 text-xs font-semibold
+              {% if fc.risk_level >= 5 %}bg-red-600
+              {% elif fc.risk_level == 4 %}bg-orange-500
+              {% elif fc.risk_level == 3 %}bg-yellow-500 text-slate-900
+              {% else %}bg-slate-700{% endif %}">{{ fc.risk_label }}</span>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="py-4 text-center text-slate-500">Sem previsões — clique em "Atualizar clima".</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="rounded-lg border border-slate-800 bg-slate-900 p-4">
+    <h2 class="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-400">Eventos recentes</h2>
+    <ul class="space-y-2">
+      {% for ev in events %}
+      <li class="rounded border border-slate-800 p-2 text-sm">
+        <div class="flex items-center justify-between">
+          <span class="text-xs text-slate-400">{{ ev.event_date.strftime("%d/%m/%Y") }} · {{ ev.event_type }}</span>
+          <span class="rounded px-2 py-0.5 text-xs font-semibold
+            {% if ev.severity >= 5 %}bg-red-600
+            {% elif ev.severity == 4 %}bg-orange-500
+            {% elif ev.severity == 3 %}bg-yellow-500 text-slate-900
+            {% else %}bg-slate-700{% endif %}">{{ ev.severity_label }}</span>
+        </div>
+        <div class="mt-1 font-medium">{{ ev.title }}</div>
+        <div class="text-xs text-slate-400">{{ ev.description }}</div>
+      </li>
+      {% else %}
+      <li class="py-4 text-center text-sm text-slate-500">Nenhum evento registrado.</li>
+      {% endfor %}
+    </ul>
+  </section>
+</div>
+
+{% if alerts %}
+<section class="mt-6 rounded-lg border border-red-900/50 bg-red-950/30 p-4">
+  <h2 class="mb-3 text-sm font-semibold uppercase tracking-wider text-red-300">Alertas ativos</h2>
+  <ul class="space-y-2 text-sm">
+    {% for a in alerts %}
+    <li><span class="font-semibold">[Sev {{ a.severity }}]</span> {{ a.title }} — {{ a.message }}</li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% endblock %}

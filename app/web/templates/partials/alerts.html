@@ -1,0 +1,29 @@
+<ul class="space-y-2">
+  {% for alert in alerts %}
+  {% set dam = dams_by_id.get(alert.dam_id) %}
+  <li class="rounded border border-slate-800 bg-slate-950/60 p-3">
+    <div class="flex items-center justify-between">
+      <span class="inline-block rounded px-2 py-0.5 text-xs font-semibold
+        {% if alert.severity >= 5 %}bg-red-600
+        {% elif alert.severity == 4 %}bg-orange-500
+        {% elif alert.severity == 3 %}bg-yellow-500 text-slate-900
+        {% else %}bg-slate-700{% endif %}">Sev {{ alert.severity }}</span>
+      <span class="text-xs text-slate-500">{{ alert.created_at.strftime("%d/%m %H:%M") }}</span>
+    </div>
+    <div class="mt-1 text-sm font-medium">{{ alert.title }}</div>
+    <div class="text-xs text-slate-400">
+      {% if dam %}<a class="hover:underline" href="/dams/{{ dam.id }}">{{ dam.name }}</a> — {{ dam.municipality }}/{{ dam.state }}{% else %}Barragem #{{ alert.dam_id }}{% endif %}
+    </div>
+    <button
+      class="mt-2 text-xs text-brand hover:underline"
+      hx-post="/api/v1/alerts/{{ alert.id }}/acknowledge"
+      hx-ext="json-enc"
+      hx-vals='{"acknowledged_by": null}'
+      hx-target="closest li"
+      hx-swap="outerHTML"
+    >Marcar como lido</button>
+  </li>
+  {% else %}
+  <li class="py-4 text-center text-sm text-slate-500">Nenhum alerta ativo.</li>
+  {% endfor %}
+</ul>

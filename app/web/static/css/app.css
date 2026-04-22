@@ -1,0 +1,38 @@
+/* DIA — complementary CSS. TailwindCSS CDN handles the rest. */
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Leaflet tiles: dark-mode friendly filter for default OSM tiles */
+.leaflet-tile-pane {
+  filter: brightness(0.7) invert(1) contrast(1.1) hue-rotate(180deg)
+    saturate(0.4);
+}
+
+.leaflet-container {
+  background: #0f172a;
+  border-radius: 0.5rem;
+}
+
+.dia-pin {
+  border-radius: 9999px;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+}
+
+.dia-pin-low {
+  background: #22c55e;
+}
+.dia-pin-mid {
+  background: #f59e0b;
+}
+.dia-pin-high {
+  background: #ef4444;
+}

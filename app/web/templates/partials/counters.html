@@ -1,0 +1,28 @@
+<div class="rounded-lg border border-slate-800 bg-slate-900 p-4">
+  <div class="text-xs uppercase tracking-wider text-slate-400">Barragens</div>
+  <div class="mt-1 text-2xl font-semibold">{{ counts.dams_total }}</div>
+  <div class="text-xs text-slate-500">{{ counts.dams_active }} ativas</div>
+</div>
+<div class="rounded-lg border border-slate-800 bg-slate-900 p-4">
+  <div class="text-xs uppercase tracking-wider text-slate-400">Alertas ativos</div>
+  <div class="mt-1 text-2xl font-semibold">{{ counts.alerts_active }}</div>
+  <div class="text-xs text-danger">{{ counts.alerts_critical }} críticos</div>
+</div>
+<div class="rounded-lg border border-slate-800 bg-slate-900 p-4">
+  <div class="text-xs uppercase tracking-wider text-slate-400">Previsões alto risco</div>
+  <div class="mt-1 text-2xl font-semibold">{{ counts.forecasts_high_risk }}</div>
+  <div class="text-xs text-slate-500">próximos 7 dias</div>
+</div>
+<div class="rounded-lg border border-slate-800 bg-slate-900 p-4">
+  <div class="text-xs uppercase tracking-wider text-slate-400">Eventos</div>
+  <div class="mt-1 text-2xl font-semibold">{{ counts.events_30d }}</div>
+  <div class="text-xs text-slate-500">últimos 30 dias</div>
+</div>
+<div class="col-span-2 rounded-lg border border-slate-800 bg-slate-900 p-4">
+  <div class="text-xs uppercase tracking-wider text-slate-400">Status sistema</div>
+  <div class="mt-1 flex items-center gap-2 text-sm">
+    <span class="inline-block h-2 w-2 rounded-full bg-ok"></span> API online
+    <span class="ml-3 inline-block h-2 w-2 rounded-full bg-ok"></span> Celery beat ativo
+  </div>
+  <div class="mt-1 text-xs text-slate-500">Fase 1 — Open-Meteo + Dashboard</div>
+</div>

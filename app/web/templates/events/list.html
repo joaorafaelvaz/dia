@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Eventos · DIA{% endblock %}
+{% block content %}
+<div class="mb-6">
+  <h1 class="text-2xl font-semibold">Eventos climáticos</h1>
+  <p class="text-sm text-slate-400">Últimos 90 dias · {{ events|length }} registros</p>
+</div>
+
+<div class="overflow-hidden rounded-lg border border-slate-800">
+  <table class="w-full text-sm">
+    <thead class="bg-slate-900 text-xs uppercase text-slate-400">
+      <tr>
+        <th class="px-4 py-2 text-left">Data</th>
+        <th class="px-4 py-2 text-left">Barragem</th>
+        <th class="px-4 py-2 text-left">Tipo</th>
+        <th class="px-4 py-2 text-left">Fonte</th>
+        <th class="px-4 py-2 text-right">Precip.</th>
+        <th class="px-4 py-2 text-right">Severidade</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-800 bg-slate-950">
+      {% for ev in events %}
+      {% set dam = dams_by_id.get(ev.dam_id) %}
+      <tr class="hover:bg-slate-900">
+        <td class="px-4 py-2">{{ ev.event_date.strftime("%d/%m/%Y") }}</td>
+        <td class="px-4 py-2">
+          {% if dam %}<a class="text-brand hover:underline" href="/dams/{{ dam.id }}">{{ dam.name }}</a>{% else %}#{{ ev.dam_id }}{% endif %}
+        </td>
+        <td class="px-4 py-2">{{ ev.event_type }}</td>
+        <td class="px-4 py-2"><span class="rounded bg-slate-800 px-2 py-0.5 text-xs">{{ ev.source_type }}</span></td>
+        <td class="px-4 py-2 text-right">{% if ev.precipitation_mm %}{{ "%.1f"|format(ev.precipitation_mm) }} mm{% else %}-{% endif %}</td>
+        <td class="px-4 py-2 text-right">
+          <span class="inline-block rounded px-2 py-0.5 text-xs font-semibold
+            {% if ev.severity >= 5 %}bg-red-600
+            {% elif ev.severity == 4 %}bg-orange-500
+            {% elif ev.severity == 3 %}bg-yellow-500 text-slate-900
+            {% else %}bg-slate-700{% endif %}">{{ ev.severity_label }}</span>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="px-4 py-6 text-center text-slate-500">Nenhum evento registrado nos últimos 90 dias.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

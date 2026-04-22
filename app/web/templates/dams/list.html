@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Barragens · DIA{% endblock %}
+{% block content %}
+<div class="mb-6">
+  <h1 class="text-2xl font-semibold">Barragens monitoradas</h1>
+  <p class="text-sm text-slate-400">{{ dams|length }} registradas</p>
+</div>
+
+<div class="overflow-hidden rounded-lg border border-slate-800">
+  <table class="w-full text-sm">
+    <thead class="bg-slate-900 text-xs uppercase text-slate-400">
+      <tr>
+        <th class="px-4 py-2 text-left">Nome</th>
+        <th class="px-4 py-2 text-left">Proprietário</th>
+        <th class="px-4 py-2 text-left">Tipo</th>
+        <th class="px-4 py-2 text-left">Município</th>
+        <th class="px-4 py-2 text-left">ANM</th>
+        <th class="px-4 py-2 text-left">DPA</th>
+        <th class="px-4 py-2 text-left">Status</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-800 bg-slate-950">
+      {% for dam in dams %}
+      <tr class="hover:bg-slate-900">
+        <td class="px-4 py-2"><a class="text-brand hover:underline" href="/dams/{{ dam.id }}">{{ dam.name }}</a></td>
+        <td class="px-4 py-2">{{ dam.owner_group }}</td>
+        <td class="px-4 py-2">{{ dam.dam_type }}</td>
+        <td class="px-4 py-2">{{ dam.municipality }}/{{ dam.state }}</td>
+        <td class="px-4 py-2">{{ dam.anm_classification or "-" }}</td>
+        <td class="px-4 py-2">{{ dam.dpa or "-" }}</td>
+        <td class="px-4 py-2">
+          {% if dam.is_active %}
+            <span class="rounded bg-ok/20 px-2 py-0.5 text-xs text-ok">ativa</span>
+          {% else %}
+            <span class="rounded bg-slate-700 px-2 py-0.5 text-xs text-slate-300">inativa</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -32,7 +32,10 @@ services:
     networks:
       - dia_net
 
+  # Single shared image — built once via the `api` service, reused by the Celery services.
+  # Avoids 4 parallel apt-get installs that can OOM / rate-limit on small hosts.
   api:
+    image: dia-app:latest
     build:
       context: .
       dockerfile: Dockerfile
@@ -56,13 +59,13 @@ services:
       - dia_net
 
   worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: dia-app:latest
     container_name: dia_worker
     command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=4
     env_file: .env
     depends_on:
+      api:
+        condition: service_started
       postgres:
         condition: service_healthy
       redis:
@@ -76,13 +79,13 @@ services:
       - dia_net
 
   beat:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: dia-app:latest
     container_name: dia_beat
     command: celery -A app.tasks.celery_app beat --loglevel=info --scheduler redbeat.RedBeatScheduler
     env_file: .env
     depends_on:
+      api:
+        condition: service_started
       redis:
         condition: service_healthy
     volumes:
@@ -92,15 +95,15 @@ services:
       - dia_net
 
   flower:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: dia-app:latest
     container_name: dia_flower
     command: celery -A app.tasks.celery_app flower --port=5555 --basic_auth=${BASIC_AUTH_USER:-admin}:${BASIC_AUTH_PASS:-admin}
     ports:
       - "5555:5555"
     env_file: .env
     depends_on:
+      api:
+        condition: service_started
       redis:
         condition: service_healthy
     restart: unless-stopped

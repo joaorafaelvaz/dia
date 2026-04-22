@@ -81,8 +81,10 @@ ok "Pré-requisitos OK"
 log "Fazendo pull de imagens base..."
 docker compose pull postgres redis || warn "pull falhou — seguindo com cache local"
 
-log "Buildando imagens locais (api/worker/beat/flower)..."
-docker compose build --pull
+# Build só o service 'api' — os demais (worker/beat/flower) reaproveitam a mesma
+# imagem 'dia-app:latest' via docker-compose.yml. Evita 4 apt-get install em paralelo.
+log "Buildando imagem dia-app (uma vez, compartilhada pelos 4 serviços)..."
+docker compose build --pull api
 
 ok "Build concluído"
 

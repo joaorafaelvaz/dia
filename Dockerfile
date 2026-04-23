@@ -30,6 +30,7 @@ ENV PYTHONUNBUFFERED=1 \
 #
 #   curl                 → HEALTHCHECK + debugging
 #   ca-certificates      → HTTPS ao Open-Meteo / news sources
+#   procps               → pgrep (healthcheck do beat) + debugging
 #   fonts-liberation     → fallback de fontes sem-serif
 #   fontconfig           → resolução de fontes no Chromium
 #   libnss3 libnspr4     → networking + criptografia do Chromium
@@ -54,6 +55,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         curl \
         ca-certificates \
+        procps \
         fonts-liberation \
         fontconfig \
         libnss3 \

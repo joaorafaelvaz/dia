@@ -6,12 +6,13 @@ acceptable for independent ingestion tasks. The DB session is short-lived per ta
 from __future__ import annotations
 
 import asyncio
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from celery.exceptions import SoftTimeLimitExceeded
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select, update
 
 from app.database import task_session
+from app.models.alert import Alert
 from app.models.dam import Dam
 from app.services.climate import aggregator, open_meteo
 from app.tasks.celery_app import celery_app
@@ -128,3 +129,85 @@ def check_all_alerts() -> dict[str, int]:
         except Exception as exc:
             log.error("check_alerts_failed", dam_id=dam_id, error=str(exc))
     return {"dams_checked": len(dam_ids), "alerts_created_or_updated": total}
+
+
+# ---------------------------------------------------------------------------
+# Alert expiration
+# ---------------------------------------------------------------------------
+
+# TTL para alertas já reconhecidos ("acknowledged"). Mesmo reconhecido, mantém
+# na UI por N dias pra referência/auditoria; depois some da query de ativos.
+_ACK_TTL_DAYS = 7
+
+# TTL padrão para forecast_warning sem expires_at explícito — defesa em
+# profundidade. O aggregator HOJE sempre popula expires_at = forecast_date + 1d,
+# mas se alguma migração ou código futuro esquecer, esse fallback pega.
+_FORECAST_WARNING_STALE_DAYS = 2
+
+
+async def _expire_alerts_async() -> dict[str, int]:
+    """Varre alertas ativos e desativa os que cairam em regras de expiração.
+
+    Regras (ordem de avaliação; qualquer uma basta pra desativar):
+      1. `expires_at IS NOT NULL AND expires_at < now()` — TTL explícito vencido
+      2. `acknowledged = true AND acknowledged_at < now() - 7d` — reconhecido há mais de uma semana
+      3. `alert_type = 'forecast_warning' AND forecast_date < today - 2d AND expires_at IS NULL`
+         — forecast alert antigo sem expires_at (defesa em profundidade)
+
+    Idempotente: já atua somente em `is_active=true`. Roda de hora em hora.
+    """
+    now = datetime.now(tz=timezone.utc)
+    ack_cutoff = now - timedelta(days=_ACK_TTL_DAYS)
+    forecast_cutoff = date.today() - timedelta(days=_FORECAST_WARNING_STALE_DAYS)
+
+    async with task_session() as session:
+        # Precisa contar primeiro pra log estruturado — segundo query atualiza.
+        # Duas passadas custam barato; alerts ativos raramente passam de 100.
+        rule_conditions = [
+            and_(Alert.expires_at.isnot(None), Alert.expires_at < now),
+            and_(Alert.acknowledged.is_(True), Alert.acknowledged_at < ack_cutoff),
+            and_(
+                Alert.alert_type == "forecast_warning",
+                Alert.expires_at.is_(None),
+                Alert.forecast_date < forecast_cutoff,
+            ),
+        ]
+
+        target_stmt = select(Alert).where(
+            Alert.is_active.is_(True),
+            or_(*rule_conditions),
+        )
+        targets = list((await session.execute(target_stmt)).scalars().all())
+        if not targets:
+            log.info("alerts_expire_sweep_clean")
+            return {"expired": 0}
+
+        update_stmt = (
+            update(Alert)
+            .where(
+                Alert.is_active.is_(True),
+                Alert.id.in_([a.id for a in targets]),
+            )
+            .values(is_active=False)
+        )
+        await session.execute(update_stmt)
+        await session.commit()
+
+        # Breakdown por tipo pra diagnóstico
+        by_type: dict[str, int] = {}
+        for a in targets:
+            by_type[a.alert_type] = by_type.get(a.alert_type, 0) + 1
+
+        log.info(
+            "alerts_expired",
+            total=len(targets),
+            by_type=by_type,
+            ack_ttl_days=_ACK_TTL_DAYS,
+        )
+        return {"expired": len(targets)}
+
+
+@celery_app.task(name="app.tasks.climate_tasks.expire_stale_alerts")
+def expire_stale_alerts() -> dict[str, int]:
+    """Desativa alertas vencidos (expires_at passado, acknowledged antigo, forecast no passado)."""
+    return asyncio.run(_expire_alerts_async())

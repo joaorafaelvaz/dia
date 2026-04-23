@@ -53,6 +53,10 @@ celery_app.conf.update(
             "task": "app.tasks.climate_tasks.check_all_alerts",
             "schedule": _parse_cron(settings.schedule_alert_check),
         },
+        "expire-stale-alerts": {
+            "task": "app.tasks.climate_tasks.expire_stale_alerts",
+            "schedule": _parse_cron(settings.schedule_alert_expiration),
+        },
         "scrape-news": {
             "task": "app.tasks.news_tasks.scrape_all_news",
             "schedule": _parse_cron(settings.schedule_news_scrape),

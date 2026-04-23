@@ -11,10 +11,12 @@ from datetime import date, datetime, timedelta, timezone
 from celery.exceptions import SoftTimeLimitExceeded
 from sqlalchemy import and_, or_, select, update
 
+from app.config import settings
 from app.database import task_session
 from app.models.alert import Alert
 from app.models.dam import Dam
-from app.services.climate import aggregator, open_meteo
+from app.services.climate import aggregator, inmet, open_meteo
+from app.services.climate.inmet import InmetError
 from app.tasks.celery_app import celery_app
 from app.utils.logging import get_logger
 
@@ -48,6 +50,38 @@ async def _fetch_for_dam(dam_id: int) -> dict[str, int]:
             dam.latitude, dam.longitude, start, end
         )
         events = aggregator.detect_extreme_events(historical.days, dam)
+
+        # 2b. INMET (opcional, atrás de feature flag): estação real mais
+        # próxima. Dedup acontece em save_climate_events via (dam_id,
+        # event_type, event_date ± 2d) — eventos que batem com Open-Meteo
+        # são mesclados no raw_data, não duplicados. Qualquer falha do INMET
+        # (timeout, 5xx, estação sem dados) é absorvida aqui: log + segue
+        # somente com Open-Meteo.
+        if settings.inmet_enabled:
+            try:
+                station, distance_km, inmet_days = await inmet.get_historical_for_coords(
+                    dam.latitude,
+                    dam.longitude,
+                    lookback_days=settings.inmet_lookback_days,
+                    state_filter=dam.state,
+                )
+                inmet_events = aggregator.detect_extreme_events(
+                    inmet_days, dam, source_key="inmet", source_label="inmet_api"
+                )
+                events.extend(inmet_events)
+                log.info(
+                    "inmet_merged",
+                    dam_id=dam.id,
+                    station=station.code,
+                    distance_km=round(distance_km, 2),
+                    inmet_days=len(inmet_days),
+                    inmet_events=len(inmet_events),
+                )
+            except InmetError as exc:
+                log.warning("inmet_skipped", dam_id=dam.id, error=str(exc))
+            except Exception as exc:  # defensivo: INMET nunca derruba a task
+                log.warning("inmet_unexpected_error", dam_id=dam.id, error=str(exc))
+
         events_written = await aggregator.save_climate_events(session, dam, events)
 
         # 3. Generate alerts from forecast horizon

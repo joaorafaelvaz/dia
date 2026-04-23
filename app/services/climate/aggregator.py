@@ -46,10 +46,21 @@ def compute_risk_score(precipitation_mm: float, dam: Dam) -> tuple[int, str, boo
 # ---------------------------------------------------------------------------
 
 
-def detect_extreme_events(days: list[DailyForecast], dam: Dam) -> list[dict[str, Any]]:
+def detect_extreme_events(
+    days: list[DailyForecast],
+    dam: Dam,
+    *,
+    source_key: str = "open_meteo",
+    source_label: str = "open_meteo_archive",
+) -> list[dict[str, Any]]:
     """Return events for days whose precipitation crosses the moderate threshold.
 
     Adjusted for dam profile (tailings dams / high DPA get lower thresholds).
+
+    `source_key` é a chave usada dentro de `raw_data` (merge por fonte em
+    save_climate_events); `source_label` vira o campo `source` do ClimateEvent.
+    Defaults apontam pra Open-Meteo, mas a mesma função é reusada pra INMET
+    passando `source_key="inmet"` / `source_label="inmet_api"`.
     """
     events: list[dict[str, Any]] = []
     for day in days:
@@ -71,10 +82,10 @@ def detect_extreme_events(days: list[DailyForecast], dam: Dam) -> list[dict[str,
                     f"Código de tempo: {describe_weather(day.weather_code)}."
                 ),
                 "source_type": "weather",
-                "source": "open_meteo_archive",
+                "source": source_label,
                 "precipitation_mm": day.precipitation_mm,
                 "raw_data": {
-                    "open_meteo": {
+                    source_key: {
                         "precipitation_sum": day.precipitation_mm,
                         "weather_code": day.weather_code,
                         "max_temperature_c": day.max_temperature_c,

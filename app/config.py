@@ -48,6 +48,14 @@ class Settings(BaseSettings):
     inmet_base_url: str = "https://apitempo.inmet.gov.br"
     cemaden_base_url: str = "http://www.cemaden.gov.br"
 
+    # INMET feature flag. Default off: Open-Meteo já cobre o caso base e o
+    # INMET adiciona latência (3 req/dam: lista + diária; lista cacheada 24h).
+    # Ligar manualmente após validar que o cliente responde do host atual.
+    inmet_enabled: bool = False
+    # Janela de lookback quando INMET está ativo. Mesmo padrão do Open-Meteo
+    # para permitir dedup (save_climate_events compara event_date ± 2d).
+    inmet_lookback_days: int = 30
+
     # --- Notifications ---
     notifications_enabled: bool = False
     n8n_webhook_url: str = ""

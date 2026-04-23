@@ -19,6 +19,7 @@ from app.models.alert import Alert
 from app.models.dam import Dam
 from app.models.event import ClimateEvent
 from app.models.forecast import Forecast
+from app.models.report import Report
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
@@ -241,6 +242,73 @@ async def events_list(
         request,
         "events/list.html",
         {"events": events, "dams_by_id": dams_by_id},
+    )
+
+
+@web_router.get("/reports", response_class=HTMLResponse)
+async def reports_list(
+    request: Request,
+    session: SessionDep,
+    _: AuthUser,
+) -> HTMLResponse:
+    """Página /reports — lista + filtros + botão 'Gerar agora'."""
+    type_f = request.query_params.get("type")
+    scope_f = request.query_params.get("scope")
+    status_f = request.query_params.get("status")
+
+    stmt = select(Report)
+    if type_f:
+        stmt = stmt.where(Report.report_type == type_f)
+    if scope_f:
+        stmt = stmt.where(Report.scope == scope_f)
+    if status_f:
+        stmt = stmt.where(Report.status == status_f)
+    stmt = stmt.order_by(Report.generated_at.desc()).limit(100)
+
+    reports = list((await session.execute(stmt)).scalars().all())
+    return templates.TemplateResponse(
+        request,
+        "reports/list.html",
+        {
+            "reports": reports,
+            "filters": {"type": type_f, "scope": scope_f, "status": status_f},
+        },
+    )
+
+
+@web_router.get("/reports/{report_id}", response_class=HTMLResponse)
+async def report_detail(
+    report_id: int,
+    request: Request,
+    session: SessionDep,
+    _: AuthUser,
+) -> HTMLResponse:
+    report = await session.get(Report, report_id)
+    if report is None:
+        raise HTTPException(status_code=404, detail="Relatório não encontrado")
+    return templates.TemplateResponse(
+        request, "reports/detail.html", {"report": report}
+    )
+
+
+@web_router.get("/partials/reports/{report_id}/status", response_class=HTMLResponse)
+async def partial_report_status(
+    report_id: int,
+    request: Request,
+    session: SessionDep,
+    _: AuthUser,
+) -> HTMLResponse:
+    """HTMX: fragment que substitui o corpo do relatório quando `status=generating`.
+
+    Polling no detail ativa em 4s. Quando status != generating, o fragment
+    devolve o HTML completo (já renderizado) + `hx-swap-oob` para parar o
+    polling dinamicamente.
+    """
+    report = await session.get(Report, report_id)
+    if report is None:
+        raise HTTPException(status_code=404, detail="Relatório não encontrado")
+    return templates.TemplateResponse(
+        request, "partials/report_status.html", {"report": report}
     )
 
 

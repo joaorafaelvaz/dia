@@ -4,8 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{% block title %}DIA — Dam Intelligence Agent{% endblock %}</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
   <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/json-enc.js"></script>
   <script defer src="https://unpkg.com/alpinejs@3.14.0/dist/cdn.min.js"></script>
   <link
     rel="stylesheet"
@@ -47,6 +48,7 @@
         <a class="block rounded px-3 py-2 hover:bg-slate-800" href="/">Dashboard</a>
         <a class="block rounded px-3 py-2 hover:bg-slate-800" href="/dams">Barragens</a>
         <a class="block rounded px-3 py-2 hover:bg-slate-800" href="/events">Eventos</a>
+        <a class="block rounded px-3 py-2 hover:bg-slate-800" href="/reports">Relatórios</a>
         <a class="block rounded px-3 py-2 hover:bg-slate-800" href="/api/docs" target="_blank">API docs ↗</a>
       </nav>
     </aside>

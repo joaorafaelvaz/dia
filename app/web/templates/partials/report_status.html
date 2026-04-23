@@ -1,0 +1,42 @@
+{#
+  Fragment retornado pelo polling HTMX quando o detail está gerando.
+  Também é o conteúdo inicial (incluído via `{% include %}` no detail).
+
+  Regra do hx-swap="outerHTML" no pai #report-body:
+  - Enquanto `status == 'generating'`, o fragment mantém o mesmo `id` e
+    `hx-trigger="every 4s"` — polling continua.
+  - Quando vira `ready`/`error`, o fragment sai sem `hx-trigger`, então
+    htmx para naturalmente de fazer polling.
+#}
+<article
+  id="report-body"
+  class="prose prose-invert max-w-none rounded-lg border border-slate-800 bg-slate-900 p-6"
+  {% if report.status == 'generating' %}
+    hx-get="/partials/reports/{{ report.id }}/status"
+    hx-trigger="every 4s"
+    hx-swap="outerHTML"
+  {% endif %}
+>
+  {% if report.status == 'generating' %}
+    <div class="flex items-center gap-3 py-4 text-slate-300">
+      <svg class="h-5 w-5 animate-spin text-brand" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.37 0 0 5.37 0 12h4zm2 5.3A7.96 7.96 0 014 12H0c0 3.04 1.13 5.82 3 7.94l3-2.64z"></path>
+      </svg>
+      <div>
+        <div class="text-sm font-medium">Gerando relatório com Claude Opus…</div>
+        <div class="text-xs text-slate-500">30–60s. A página atualiza sozinha.</div>
+      </div>
+    </div>
+  {% elif report.status == 'error' %}
+    <div class="rounded border border-red-900 bg-red-950/40 p-4 text-sm text-red-200">
+      <div class="font-semibold">Falha na geração</div>
+      <pre class="mt-2 whitespace-pre-wrap text-xs text-red-300">{{ report.error_message or "(sem detalhes)" }}</pre>
+    </div>
+  {% elif report.status == 'ready' %}
+    {# content_html é Markdown renderizado pelo python-markdown — HTML seguro #}
+    {{ report.content_html|safe }}
+  {% else %}
+    <div class="text-sm text-slate-400">Status desconhecido: {{ report.status }}</div>
+  {% endif %}
+</article>

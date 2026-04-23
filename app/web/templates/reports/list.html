@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+{% block title %}Relatórios · DIA{% endblock %}
+{% block content %}
+<div
+  class="mb-6 flex items-center justify-between"
+  x-data="reportGenerator()"
+>
+  <div>
+    <h1 class="text-2xl font-semibold">Relatórios</h1>
+    <p class="text-sm text-slate-400">
+      {{ reports|length }} {% if reports|length == 1 %}relatório{% else %}relatórios{% endif %}
+      · briefing interno e relatório técnico-executivo
+    </p>
+  </div>
+
+  <button
+    class="rounded bg-brand px-3 py-1.5 text-sm font-medium hover:bg-brand-dark"
+    @click="open = true"
+  >Gerar relatório</button>
+
+  <!-- Modal "Gerar relatório" -->
+  <div
+    x-show="open"
+    x-cloak
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+    @keydown.escape.window="open = false"
+  >
+    <div class="w-full max-w-md rounded-lg border border-slate-800 bg-slate-900 p-6 shadow-xl" @click.outside="open = false">
+      <div class="mb-4 flex items-center justify-between">
+        <h2 class="text-lg font-semibold">Gerar novo relatório</h2>
+        <button class="text-slate-400 hover:text-slate-100" @click="open = false">✕</button>
+      </div>
+
+      <form @submit.prevent="submit()">
+        <label class="mb-3 block">
+          <span class="text-xs uppercase tracking-wider text-slate-400">Tipo</span>
+          <select x-model="form.report_type" class="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm">
+            <option value="briefing">Briefing comercial (interno)</option>
+            <option value="client">Relatório técnico-executivo (cliente)</option>
+          </select>
+        </label>
+
+        <label class="mb-3 block">
+          <span class="text-xs uppercase tracking-wider text-slate-400">Escopo</span>
+          <select x-model="form.scope" class="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm">
+            <option value="all">Todas as barragens</option>
+            <option value="gerdau">Gerdau</option>
+            <option value="kinross">Kinross</option>
+            <option value="custom">Seleção customizada</option>
+          </select>
+        </label>
+
+        <label class="mb-3 block" x-show="form.scope === 'custom'" x-transition>
+          <span class="text-xs uppercase tracking-wider text-slate-400">IDs das barragens (vírgula)</span>
+          <input
+            x-model="form.dam_ids"
+            type="text"
+            placeholder="1, 3, 7"
+            class="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+          />
+        </label>
+
+        <label class="mb-4 block">
+          <span class="text-xs uppercase tracking-wider text-slate-400">Período (dias)</span>
+          <input
+            x-model.number="form.period_days"
+            type="number"
+            min="1" max="365"
+            class="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+          />
+        </label>
+
+        <div class="mt-4 flex items-center justify-between gap-2">
+          <span class="text-xs text-slate-500">⚡ Gera com Claude Opus (~US$ 0,15–0,25/relatório)</span>
+          <div class="flex gap-2">
+            <button type="button" class="rounded border border-slate-700 px-3 py-1.5 text-sm hover:bg-slate-800" @click="open = false" :disabled="submitting">Cancelar</button>
+            <button type="submit" class="rounded bg-brand px-3 py-1.5 text-sm font-medium hover:bg-brand-dark disabled:opacity-50 disabled:cursor-wait" :disabled="submitting">
+              <span x-show="!submitting">Gerar</span>
+              <span x-show="submitting">Enviando…</span>
+            </button>
+          </div>
+        </div>
+
+        <div x-show="error" x-cloak class="mt-3 rounded border border-red-900 bg-red-950/40 p-2 text-xs text-red-300" x-text="error"></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function reportGenerator() {
+  return {
+    open: false,
+    submitting: false,
+    error: null,
+    form: { report_type: "briefing", scope: "all", period_days: 30, dam_ids: "" },
+    async submit() {
+      this.submitting = true;
+      this.error = null;
+      try {
+        const body = {
+          report_type: this.form.report_type,
+          scope: this.form.scope,
+          period_days: parseInt(this.form.period_days, 10),
+          dam_ids: this.form.scope === "custom"
+            ? this.form.dam_ids.split(",").map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n))
+            : null,
+        };
+        const resp = await fetch("/api/v1/reports/generate", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(body),
+          credentials: "same-origin",
+        });
+        if (!resp.ok) {
+          const msg = await resp.text();
+          throw new Error(`HTTP ${resp.status}: ${msg.slice(0, 200)}`);
+        }
+        const data = await resp.json();
+        window.location = `/reports/${data.id}`;
+      } catch (e) {
+        this.error = e.message || String(e);
+        this.submitting = false;
+      }
+    }
+  }
+}
+</script>
+
+<!-- Filtros -->
+<form method="get" class="mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-slate-800 bg-slate-900 p-3 text-sm">
+  <label class="flex flex-col">
+    <span class="text-xs uppercase tracking-wider text-slate-400">Tipo</span>
+    <select name="type" class="mt-1 rounded border border-slate-700 bg-slate-950 px-2 py-1">
+      <option value="">Todos</option>
+      <option value="briefing" {% if filters.type == 'briefing' %}selected{% endif %}>Briefing interno</option>
+      <option value="client" {% if filters.type == 'client' %}selected{% endif %}>Relatório cliente</option>
+    </select>
+  </label>
+  <label class="flex flex-col">
+    <span class="text-xs uppercase tracking-wider text-slate-400">Escopo</span>
+    <select name="scope" class="mt-1 rounded border border-slate-700 bg-slate-950 px-2 py-1">
+      <option value="">Todos</option>
+      <option value="all" {% if filters.scope == 'all' %}selected{% endif %}>Todas</option>
+      <option value="gerdau" {% if filters.scope == 'gerdau' %}selected{% endif %}>Gerdau</option>
+      <option value="kinross" {% if filters.scope == 'kinross' %}selected{% endif %}>Kinross</option>
+      <option value="custom" {% if filters.scope == 'custom' %}selected{% endif %}>Customizado</option>
+    </select>
+  </label>
+  <label class="flex flex-col">
+    <span class="text-xs uppercase tracking-wider text-slate-400">Status</span>
+    <select name="status" class="mt-1 rounded border border-slate-700 bg-slate-950 px-2 py-1">
+      <option value="">Todos</option>
+      <option value="ready" {% if filters.status == 'ready' %}selected{% endif %}>Pronto</option>
+      <option value="generating" {% if filters.status == 'generating' %}selected{% endif %}>Gerando</option>
+      <option value="error" {% if filters.status == 'error' %}selected{% endif %}>Erro</option>
+    </select>
+  </label>
+  <button class="rounded bg-slate-800 px-3 py-1.5 hover:bg-slate-700">Filtrar</button>
+  <a href="/reports" class="text-xs text-slate-400 hover:underline">limpar</a>
+</form>
+
+<!-- Tabela -->
+<div class="overflow-hidden rounded-lg border border-slate-800">
+  <table class="w-full text-sm">
+    <thead class="bg-slate-900 text-xs uppercase text-slate-400">
+      <tr>
+        <th class="px-4 py-2 text-left">Gerado em</th>
+        <th class="px-4 py-2 text-left">Título</th>
+        <th class="px-4 py-2 text-left">Tipo</th>
+        <th class="px-4 py-2 text-left">Escopo</th>
+        <th class="px-4 py-2 text-left">Período</th>
+        <th class="px-4 py-2 text-left">Status</th>
+        <th class="px-4 py-2 text-right">Ações</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-800 bg-slate-950">
+      {% for r in reports %}
+      <tr class="hover:bg-slate-900">
+        <td class="px-4 py-2 whitespace-nowrap text-slate-300">
+          {% if r.generated_at %}{{ r.generated_at.strftime("%d/%m/%Y %H:%M") }}{% else %}—{% endif %}
+        </td>
+        <td class="px-4 py-2">
+          <a class="text-brand hover:underline" href="/reports/{{ r.id }}">{{ r.title }}</a>
+        </td>
+        <td class="px-4 py-2">
+          {% if r.report_type == 'briefing' %}
+            <span class="rounded bg-indigo-900/60 px-2 py-0.5 text-xs text-indigo-200">Briefing</span>
+          {% else %}
+            <span class="rounded bg-emerald-900/60 px-2 py-0.5 text-xs text-emerald-200">Cliente</span>
+          {% endif %}
+        </td>
+        <td class="px-4 py-2 capitalize">{{ r.scope }}</td>
+        <td class="px-4 py-2 text-xs text-slate-400">
+          {{ r.period_start.strftime("%d/%m") }} – {{ r.period_end.strftime("%d/%m/%Y") }}
+        </td>
+        <td class="px-4 py-2">
+          {% if r.status == 'ready' %}
+            <span class="rounded bg-green-700/80 px-2 py-0.5 text-xs">Pronto</span>
+          {% elif r.status == 'generating' %}
+            <span class="rounded bg-yellow-600/80 px-2 py-0.5 text-xs">Gerando…</span>
+          {% elif r.status == 'error' %}
+            <span class="rounded bg-red-700/80 px-2 py-0.5 text-xs" title="{{ r.error_message or '' }}">Erro</span>
+          {% else %}
+            <span class="rounded bg-slate-700 px-2 py-0.5 text-xs">{{ r.status }}</span>
+          {% endif %}
+        </td>
+        <td class="px-4 py-2 text-right text-xs">
+          <a class="text-brand hover:underline" href="/reports/{{ r.id }}">ver</a>
+          {% if r.status == 'ready' %}
+            · <a class="text-brand hover:underline" href="/api/v1/reports/{{ r.id }}/pdf" target="_blank">PDF</a>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="px-4 py-6 text-center text-slate-500">Nenhum relatório ainda. Clica em "Gerar relatório" acima.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

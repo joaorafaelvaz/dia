@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}{{ report.title }} · DIA{% endblock %}
+{% block content %}
+<div class="mb-4">
+  <a class="text-xs text-slate-400 hover:underline" href="/reports">← Todos os relatórios</a>
+</div>
+
+<div class="mb-6 flex flex-wrap items-start justify-between gap-4">
+  <div>
+    <h1 class="text-2xl font-semibold">{{ report.title }}</h1>
+    <p class="mt-1 text-sm text-slate-400">
+      {% if report.report_type == 'briefing' %}
+        <span class="rounded bg-indigo-900/60 px-2 py-0.5 text-xs text-indigo-200">Briefing interno</span>
+      {% else %}
+        <span class="rounded bg-emerald-900/60 px-2 py-0.5 text-xs text-emerald-200">Relatório cliente</span>
+      {% endif %}
+      · escopo <span class="capitalize">{{ report.scope }}</span>
+      · período {{ report.period_start.strftime("%d/%m/%Y") }} – {{ report.period_end.strftime("%d/%m/%Y") }}
+      {% if report.generated_at %}
+        · gerado em {{ report.generated_at.strftime("%d/%m/%Y %H:%M") }} UTC
+      {% endif %}
+    </p>
+  </div>
+
+  <div class="flex gap-2">
+    {% if report.status == 'ready' %}
+      <a
+        href="/api/v1/reports/{{ report.id }}/pdf"
+        target="_blank"
+        class="rounded bg-brand px-3 py-1.5 text-sm font-medium hover:bg-brand-dark"
+      >Baixar PDF</a>
+      <a
+        href="/api/v1/reports/{{ report.id }}/markdown"
+        target="_blank"
+        class="rounded border border-slate-700 px-3 py-1.5 text-sm hover:bg-slate-800"
+      >Ver Markdown</a>
+    {% endif %}
+    <button
+      class="rounded border border-red-800 bg-red-950/40 px-3 py-1.5 text-sm text-red-200 hover:bg-red-950/60"
+      hx-delete="/api/v1/reports/{{ report.id }}"
+      hx-confirm="Excluir este relatório permanentemente?"
+      hx-on::after-request="if(event.detail.successful) window.location = '/reports'"
+    >Excluir</button>
+  </div>
+</div>
+
+<!-- Corpo do relatório (é substituído via HTMX quando generating) -->
+<article
+  id="report-body"
+  {% if report.status == 'generating' %}
+    hx-get="/partials/reports/{{ report.id }}/status"
+    hx-trigger="every 4s"
+    hx-swap="outerHTML"
+  {% endif %}
+>
+  {% include "partials/report_status.html" %}
+</article>
+{% endblock %}

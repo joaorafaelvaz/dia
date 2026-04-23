@@ -18,8 +18,10 @@ A função pública é `render_report_pdf(report)` — recebe uma instância de
 """
 from __future__ import annotations
 
+import base64
 from datetime import datetime, timezone
 from html import escape
+from pathlib import Path
 
 from weasyprint import CSS, HTML
 
@@ -27,6 +29,31 @@ from app.models.report import Report
 from app.utils.logging import get_logger
 
 log = get_logger(__name__)
+
+
+# Logo Fractal — carregada uma vez no import e embutida como data URI.
+# Colocar o arquivo em `app/web/static/img/fractal-logo.png` (ou .svg). Se
+# ausente, o PDF renderiza sem logo (fallback silencioso) pra não quebrar
+# geração quando o asset não foi commitado ainda.
+_LOGO_PATH_PNG = Path(__file__).resolve().parent.parent.parent / "web" / "static" / "img" / "fractal-logo.png"
+_LOGO_PATH_SVG = Path(__file__).resolve().parent.parent.parent / "web" / "static" / "img" / "fractal-logo.svg"
+
+
+def _load_logo_data_uri() -> str | None:
+    """Carrega o logo como data URI. Prefere SVG (vetor, escala bem)."""
+    for path, mime in ((_LOGO_PATH_SVG, "image/svg+xml"), (_LOGO_PATH_PNG, "image/png")):
+        try:
+            data = path.read_bytes()
+        except OSError:
+            continue
+        b64 = base64.b64encode(data).decode("ascii")
+        log.info("report_pdf_logo_loaded", path=str(path), bytes=len(data))
+        return f"data:{mime};base64,{b64}"
+    log.warning("report_pdf_logo_missing", searched=[str(_LOGO_PATH_PNG), str(_LOGO_PATH_SVG)])
+    return None
+
+
+_LOGO_DATA_URI: str | None = _load_logo_data_uri()
 
 
 # CSS pensado para A4 com margens razoáveis e boa legibilidade em impressão.
@@ -59,6 +86,11 @@ html {
     border-bottom: 2px solid #1e3a8a;
     padding-bottom: 8pt;
     margin-bottom: 14pt;
+}
+.header .logo {
+    max-height: 36pt;
+    max-width: 150pt;
+    margin-bottom: 8pt;
 }
 .header .title {
     font-size: 15pt;
@@ -149,6 +181,12 @@ def _wrap_html(report: Report) -> str:
     # O content_html vem do python-markdown — já é HTML válido, usamos direto.
     body = report.content_html or "<p><em>Conteúdo vazio.</em></p>"
 
+    logo_img = (
+        f'<img class="logo" src="{_LOGO_DATA_URI}" alt="Fractal Engenharia"/>'
+        if _LOGO_DATA_URI
+        else ""
+    )
+
     return f"""<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -157,6 +195,7 @@ def _wrap_html(report: Report) -> str:
 </head>
 <body>
   <header class="header">
+    {logo_img}
     <p class="title">{title}</p>
     <p class="subtitle">{subtitle}</p>
   </header>

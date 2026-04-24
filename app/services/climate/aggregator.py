@@ -59,8 +59,8 @@ def detect_extreme_events(
 
     `source_key` é a chave usada dentro de `raw_data` (merge por fonte em
     save_climate_events); `source_label` vira o campo `source` do ClimateEvent.
-    Defaults apontam pra Open-Meteo, mas a mesma função é reusada pra INMET
-    passando `source_key="inmet"` / `source_label="inmet_api"`.
+    Defaults apontam pra Open-Meteo, mas a mesma função é reusada pra ANA
+    passando `source_key="ana"` / `source_label="ana_hidroweb"`.
     """
     events: list[dict[str, Any]] = []
     for day in days:

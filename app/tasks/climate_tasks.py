@@ -15,8 +15,8 @@ from app.config import settings
 from app.database import task_session
 from app.models.alert import Alert
 from app.models.dam import Dam
-from app.services.climate import aggregator, inmet, open_meteo
-from app.services.climate.inmet import InmetError
+from app.services.climate import aggregator, ana, open_meteo
+from app.services.climate.ana import AnaError
 from app.tasks.celery_app import celery_app
 from app.utils.logging import get_logger
 
@@ -51,36 +51,41 @@ async def _fetch_for_dam(dam_id: int) -> dict[str, int]:
         )
         events = aggregator.detect_extreme_events(historical.days, dam)
 
-        # 2b. INMET (opcional, atrás de feature flag): estação real mais
-        # próxima. Dedup acontece em save_climate_events via (dam_id,
-        # event_type, event_date ± 2d) — eventos que batem com Open-Meteo
-        # são mesclados no raw_data, não duplicados. Qualquer falha do INMET
-        # (timeout, 5xx, estação sem dados) é absorvida aqui: log + segue
-        # somente com Open-Meteo.
-        if settings.inmet_enabled:
+        # 2b. ANA Hidrowebservice (opcional, atrás de feature flag): chuva
+        # convencional oficial da rede hidrometeorológica. Dado observado
+        # com lag 2-6 meses — **não** cobre a janela recente do Open-Meteo,
+        # serve como ground-truth histórico. Dedup acontece em
+        # save_climate_events via (dam_id, event_type, event_date ± 2d):
+        # quando bate com um evento já detectado pelo Open-Meteo, é
+        # mesclado no raw_data (fonte `ana`) em vez de duplicar.
+        # Qualquer falha (credencial inválida, timeout, estado sem
+        # estação pluviométrica ativa) é absorvida: log + segue só com
+        # Open-Meteo.
+        if settings.ana_enabled:
             try:
-                station, distance_km, inmet_days = await inmet.get_historical_for_coords(
+                station, distance_km, ana_days = await ana.get_historical_for_coords(
                     dam.latitude,
                     dam.longitude,
-                    lookback_days=settings.inmet_lookback_days,
+                    lookback_months=settings.ana_lookback_months,
                     state_filter=dam.state,
                 )
-                inmet_events = aggregator.detect_extreme_events(
-                    inmet_days, dam, source_key="inmet", source_label="inmet_api"
+                ana_events = aggregator.detect_extreme_events(
+                    ana_days, dam, source_key="ana", source_label="ana_hidroweb"
                 )
-                events.extend(inmet_events)
+                events.extend(ana_events)
                 log.info(
-                    "inmet_merged",
+                    "ana_merged",
                     dam_id=dam.id,
                     station=station.code,
+                    station_name=station.name,
                     distance_km=round(distance_km, 2),
-                    inmet_days=len(inmet_days),
-                    inmet_events=len(inmet_events),
+                    ana_days=len(ana_days),
+                    ana_events=len(ana_events),
                 )
-            except InmetError as exc:
-                log.warning("inmet_skipped", dam_id=dam.id, error=str(exc))
-            except Exception as exc:  # defensivo: INMET nunca derruba a task
-                log.warning("inmet_unexpected_error", dam_id=dam.id, error=str(exc))
+            except AnaError as exc:
+                log.warning("ana_skipped", dam_id=dam.id, error=str(exc))
+            except Exception as exc:  # defensivo: ANA nunca derruba a task
+                log.warning("ana_unexpected_error", dam_id=dam.id, error=str(exc))
 
         events_written = await aggregator.save_climate_events(session, dam, events)
 

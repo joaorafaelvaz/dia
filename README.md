@@ -19,7 +19,7 @@ Monitoramento autônomo de barragens para a **Fractal Engenharia**. Coleta dados
 | F1 | Núcleo: models + Open-Meteo + API + dashboard + alertas | ⏳ próximo |
 | F2 | News scraping (Playwright) + classificação IA + métricas de custo | ⏳ |
 | F3 | Geração de relatórios IA + export PDF | ⏳ |
-| F4 | INMET + CEMADEN + notificações (WhatsApp/email) + testes + docs | ⏳ |
+| F4 | ANA Hidrowebservice + CEMADEN + notificações (WhatsApp/email) + testes + docs | ⏳ |
 
 ## Quick start (scaffold validation)
 
@@ -53,7 +53,7 @@ O endpoint `/api/v1/health` é um stub — será substituído na Fase 1.
 │   ├── models/             # SQLAlchemy ORM (Fase 1)
 │   ├── schemas/            # Pydantic v2 (Fase 1)
 │   ├── services/
-│   │   ├── climate/        # Open-Meteo / INMET / CEMADEN
+│   │   ├── climate/        # Open-Meteo / ANA Hidrowebservice / CEMADEN
 │   │   ├── news/           # Scraping + classificação
 │   │   ├── ai/             # Claude client + relatórios
 │   │   └── notifications/  # WhatsApp (n8n) + email

@@ -38,7 +38,7 @@ class Forecast(Base):
     )
 
     source: Mapped[str] = mapped_column(String(50), nullable=False, default="open_meteo")
-    # "open_meteo" | "inmet" | "cemaden"
+    # "open_meteo" | "ana" | "cemaden"
 
     max_precipitation_mm: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     total_precipitation_mm: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)

@@ -58,3 +58,6 @@ htmlcov/
 *.db
 postgres_data/
 redis_data/
+
+# Investigation scratch (API probes, XML dumps, JWT traces)
+.tmp_*

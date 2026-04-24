@@ -45,16 +45,25 @@ class Settings(BaseSettings):
     # --- External climate APIs ---
     open_meteo_forecast_url: str = "https://api.open-meteo.com/v1/forecast"
     open_meteo_archive_url: str = "https://archive-api.open-meteo.com/v1/archive"
-    inmet_base_url: str = "https://apitempo.inmet.gov.br"
     cemaden_base_url: str = "http://www.cemaden.gov.br"
 
-    # INMET feature flag. Default off: Open-Meteo já cobre o caso base e o
-    # INMET adiciona latência (3 req/dam: lista + diária; lista cacheada 24h).
-    # Ligar manualmente após validar que o cliente responde do host atual.
-    inmet_enabled: bool = False
-    # Janela de lookback quando INMET está ativo. Mesmo padrão do Open-Meteo
-    # para permitir dedup (save_climate_events compara event_date ± 2d).
-    inmet_lookback_days: int = 30
+    # --- ANA Hidrowebservice ---
+    # Substitui o INMET (apitempo saiu do ar; tempo.inmet.gov.br é gated por
+    # reCAPTCHA v3). ANA requer OAUth (Identificador + Senha → Bearer JWT com
+    # TTL ~1h). Escopo atual: chuva convencional — dado observado com lag
+    # 2-6 meses, usado como ground-truth histórico em relatórios. Não cobre
+    # real-time (esse papel fica com Open-Meteo). Telemétrica existe mas
+    # endpoint ainda não foi destravado — ver TODO em ana.py.
+    ana_base_url: str = "https://www.ana.gov.br/hidrowebservice"
+    # Feature flag: cliente só é chamado quando true. Sem credenciais, deixa
+    # false — task absorve AnaError e segue só com Open-Meteo.
+    ana_enabled: bool = False
+    ana_user: str = ""
+    ana_pass: str = ""
+    # Janela de lookback em meses. 6 cobre o trimestre anterior com dados
+    # consistidos (operadora leva ~3 meses pra revisar). Limite duro da
+    # API: 366 dias — o cliente faz o clamp.
+    ana_lookback_months: int = 6
 
     # --- Notifications ---
     notifications_enabled: bool = False

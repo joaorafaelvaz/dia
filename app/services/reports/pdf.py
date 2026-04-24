@@ -12,9 +12,10 @@ A função pública é `render_report_pdf(report)` — recebe uma instância de
   mais rico (com logo Fractal, tabelas de dam_profiles, etc.), este
   módulo pode ser refatorado pra consumir esse template em vez do wrapper
   inline. Por ora, simples é melhor.
-- WeasyPrint importa libs nativas (cairo, pango) na hora do import;
-  mantemos o import no topo do módulo porque o Dockerfile já inclui
-  essas libs (mesmas usadas pelo Chromium do Playwright).
+- WeasyPrint importa libs nativas (cairo, pango) na hora do import.
+  Em produção (Docker) tudo está disponível; em hosts de dev/CI sem
+  GTK (Windows, máquina enxuta) o import top-level quebraria o app
+  inteiro. Por isso o import fica **lazy** dentro de `render_report_pdf`.
 """
 from __future__ import annotations
 
@@ -22,8 +23,6 @@ import base64
 from datetime import datetime, timezone
 from html import escape
 from pathlib import Path
-
-from weasyprint import CSS, HTML
 
 from app.models.report import Report
 from app.utils.logging import get_logger
@@ -212,7 +211,16 @@ def _wrap_html(report: Report) -> str:
 
 
 def render_report_pdf(report: Report) -> bytes:
-    """Renderiza o `Report` como PDF (bytes). Levanta se WeasyPrint falhar."""
+    """Renderiza o `Report` como PDF (bytes). Levanta se WeasyPrint falhar.
+
+    Import lazy: WeasyPrint puxa cairo/pango (libs nativas). O Dockerfile
+    já tem; hosts de dev sem GTK (Windows/CI enxuto) também conseguem
+    rodar tudo *exceto* esta função. Pegar o ImportError aqui em vez
+    de no topo do módulo significa que toda a app sobe normalmente e
+    só a chamada de PDF reclama.
+    """
+    from weasyprint import CSS, HTML  # noqa: PLC0415
+
     html_str = _wrap_html(report)
     pdf_bytes = HTML(string=html_str).write_pdf(
         stylesheets=[CSS(string=_BASE_CSS)],

@@ -83,6 +83,10 @@ dev-dependencies = [
     "factory-boy>=3.3.0",
     "ruff>=0.5.0",
     "mypy>=1.10.0",
+    # SQLite async driver para tests — evita precisar de postgres nos
+    # testes offline. As models usam tipos genéricos (JSON/Date/DateTime)
+    # que o dialect aiosqlite suporta direto.
+    "aiosqlite>=0.20.0",
 ]
 
 [build-system]

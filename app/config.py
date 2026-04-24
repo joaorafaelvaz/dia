@@ -65,10 +65,12 @@ class Settings(BaseSettings):
     # API: 366 dias — o cliente faz o clamp.
     ana_lookback_months: int = 6
     # Quantas estações pluviométricas mais próximas tentar antes de desistir.
-    # Muitas estações marcadas `Operando=1` não têm série convencional
-    # publicada pra janela recente; fallback automático pra 2ª, 3ª... mais
-    # próximas. Raio típico entre top-5 < 30 km.
-    ana_max_station_candidates: int = 5
+    # Sondagem em Ouro Preto (2026-04) mostrou que rank 1-6 eram todas
+    # vazias mesmo pra 2023; primeiro hit foi rank 7 a 17 km. 15 cobre
+    # até rank 19 (~20 km) dando folga pra casos onde rank 7-8 também
+    # ficam temporariamente sem publicar. Cache negativo de 7 dias
+    # (RAINFALL_EMPTY_CACHE_TTL_SECONDS) evita re-sondar vazias.
+    ana_max_station_candidates: int = 15
 
     # --- Notifications ---
     notifications_enabled: bool = False

@@ -70,6 +70,16 @@ TOKEN_SAFETY_MARGIN_SECONDS = 60
 STATIONS_CACHE_KEY_TMPL = "ana:stations:uf:{uf}"
 STATIONS_CACHE_TTL_SECONDS = 24 * 60 * 60
 
+# Cache negativo de (estação, janela) vazia. Muitas estações marcadas
+# Tipo_Estacao_Pluviometro=1 + Operando=1 no inventário não publicam série
+# convencional pra NENHUMA janela (sondagem em Ouro Preto: 6 das 10 mais
+# próximas vazias mesmo pra 2023). Sem este cache a task refaz a mesma
+# sondagem inútil a cada ciclo — 15 dams × ~6 estações vazias/dam × 1
+# ciclo/3h = ~720 requests desperdiçados/dia contra a API da ANA. 7 dias
+# de TTL deixa espaço pra eventual backfill de dados.
+RAINFALL_EMPTY_CACHE_KEY_TMPL = "ana:rainfall:empty:{code}:{start}:{end}"
+RAINFALL_EMPTY_CACHE_TTL_SECONDS = 7 * 24 * 60 * 60
+
 # Tipo de medição marcador — vem como string "0"/"1" no JSON.
 TIPO_PLUVIOMETRO = "1"
 OPERANDO = "1"
@@ -471,6 +481,25 @@ async def get_rainfall(
             f"get_rainfall: janela {(end-start).days}d excede limite de 366d da ANA"
         )
 
+    # Cache negativo: se essa estação já retornou vazio pra essa janela
+    # exata recentemente, pula a chamada. A API responde rápido mas o
+    # volume é grande (ver RAINFALL_EMPTY_CACHE_TTL_SECONDS).
+    r = _get_redis()
+    empty_key = RAINFALL_EMPTY_CACHE_KEY_TMPL.format(
+        code=station_code, start=start.isoformat(), end=end.isoformat()
+    )
+    try:
+        if await r.get(empty_key):
+            log.info(
+                "ana_rainfall_no_data_cached",
+                station=station_code,
+                start=start.isoformat(),
+                end=end.isoformat(),
+            )
+            return []
+    except Exception as exc:
+        log.warning("ana_cache_read_failed", key=empty_key, error=str(exc))
+
     payload = await _authed_get(
         "/EstacoesTelemetricas/HidroSerieChuva/v1",
         params={
@@ -494,6 +523,10 @@ async def get_rainfall(
             end=end.isoformat(),
             message=str(payload.get("message", "")),
         )
+        try:
+            await r.set(empty_key, "1", ex=RAINFALL_EMPTY_CACHE_TTL_SECONDS)
+        except Exception as exc:
+            log.warning("ana_cache_write_failed", key=empty_key, error=str(exc))
         return []
 
     # Dedup por data preferindo Nivel_Consistencia=2 (consistido) sobre 1 (bruto).
@@ -619,6 +652,37 @@ async def get_historical_for_coords(
     raise AnaError(msg)
 
 
+async def clear_rainfall_empty_cache(station_code: int | None = None) -> int:
+    """Limpa cache negativo de estações vazias. Devolve chaves removidas.
+
+    Útil depois que a operadora publica backfill de dados históricos: sem
+    isso, o run continuaria pulando a estação até o TTL (7d) expirar.
+
+    - `station_code=None` → limpa cache de todas as estações.
+    - `station_code=X`    → limpa só da estação X (todas as janelas).
+    """
+    r = _get_redis()
+    pattern = (
+        f"ana:rainfall:empty:{station_code}:*"
+        if station_code is not None
+        else "ana:rainfall:empty:*"
+    )
+    try:
+        removed = 0
+        async for key in r.scan_iter(match=pattern, count=500):
+            removed += await r.delete(key)
+        log.info(
+            "ana_cache_cleared",
+            scope="rainfall_empty",
+            station=station_code,
+            removed=removed,
+        )
+        return removed
+    except Exception as exc:
+        log.warning("ana_cache_clear_failed", pattern=pattern, error=str(exc))
+        raise AnaError(f"falha limpando cache: {exc}") from exc
+
+
 __all__ = [
     "AnaError",
     "AnaAuthError",
@@ -628,4 +692,5 @@ __all__ = [
     "nearest_pluvio_stations",
     "get_rainfall",
     "get_historical_for_coords",
+    "clear_rainfall_empty_cache",
 ]

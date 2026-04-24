@@ -37,6 +37,7 @@ caso recente.
 """
 from __future__ import annotations
 
+import asyncio
 import calendar
 import json
 from dataclasses import dataclass
@@ -131,15 +132,45 @@ class AnaStation:
 # ---------------------------------------------------------------------------
 # Redis helper
 # ---------------------------------------------------------------------------
+#
+# Celery roda cada task num `asyncio.run()` próprio — cada chamada cria um
+# event loop novo e o destrói no fim. Um `redis.asyncio.Redis` criado no loop
+# da task N fica com connections amarrados àquele loop; quando a task N+1
+# pegava o mesmo objeto do módulo (padrão singleton anterior), a primeira
+# operação levantava "Event loop is closed" e o try/except engolia o erro —
+# o custo era re-baixar 12 MB de inventário a cada task.
+#
+# Fix: indexa o client por `id(loop)` da task atual. Cada loop ativo tem o
+# seu; entradas de loops já fechados são podadas preguiçosamente na próxima
+# chamada (em vez de registrar callback de shutdown no loop, que é frágil
+# quando o loop é destruído por `asyncio.run()`). Pattern equivalente ao
+# `task_session()` em app/database.py (recurso por loop, não singleton).
 
-_redis: aioredis.Redis | None = None
+_redis_by_loop: dict[int, tuple[asyncio.AbstractEventLoop, aioredis.Redis]] = {}
 
 
 def _get_redis() -> aioredis.Redis:
-    global _redis
-    if _redis is None:
-        _redis = aioredis.from_url(settings.redis_url, decode_responses=True)
-    return _redis
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError as exc:
+        # Chamador sempre usa dentro de await, então cair aqui seria bug.
+        raise AnaError("_get_redis chamado fora de event loop") from exc
+
+    # Poda entradas de loops fechados — roda a cada chamada mas é O(n) com n
+    # minúsculo (uma entrada por task em voo; Celery rodando 4-worker × 1 task
+    # = no máximo 4 entradas simultâneas).
+    stale = [lid for lid, (lp, _c) in _redis_by_loop.items() if lp.is_closed()]
+    for lid in stale:
+        _redis_by_loop.pop(lid, None)
+
+    loop_id = id(loop)
+    cached = _redis_by_loop.get(loop_id)
+    if cached is not None:
+        return cached[1]
+
+    client = aioredis.from_url(settings.redis_url, decode_responses=True)
+    _redis_by_loop[loop_id] = (loop, client)
+    return client
 
 
 # ---------------------------------------------------------------------------

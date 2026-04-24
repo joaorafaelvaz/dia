@@ -68,6 +68,7 @@ async def _fetch_for_dam(dam_id: int) -> dict[str, int]:
                     dam.longitude,
                     lookback_months=settings.ana_lookback_months,
                     state_filter=dam.state,
+                    max_station_candidates=settings.ana_max_station_candidates,
                 )
                 ana_events = aggregator.detect_extreme_events(
                     ana_days, dam, source_key="ana", source_label="ana_hidroweb"

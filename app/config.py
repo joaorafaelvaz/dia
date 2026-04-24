@@ -64,6 +64,11 @@ class Settings(BaseSettings):
     # consistidos (operadora leva ~3 meses pra revisar). Limite duro da
     # API: 366 dias — o cliente faz o clamp.
     ana_lookback_months: int = 6
+    # Quantas estações pluviométricas mais próximas tentar antes de desistir.
+    # Muitas estações marcadas `Operando=1` não têm série convencional
+    # publicada pra janela recente; fallback automático pra 2ª, 3ª... mais
+    # próximas. Raio típico entre top-5 < 30 km.
+    ana_max_station_candidates: int = 5
 
     # --- Notifications ---
     notifications_enabled: bool = False

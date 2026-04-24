@@ -338,20 +338,25 @@ async def list_stations_for_state(uf: str) -> list[AnaStation]:
     return stations
 
 
-async def nearest_pluvio_station(
-    lat: float, lon: float, *, state_filter: str | None = None
-) -> tuple[AnaStation, float]:
-    """Retorna (estação pluviométrica mais próxima, distância_km).
+async def nearest_pluvio_stations(
+    lat: float,
+    lon: float,
+    *,
+    state_filter: str,
+    max_results: int = 5,
+) -> list[tuple[AnaStation, float]]:
+    """Top-N estações pluviométricas ativas ordenadas por distância (km).
 
-    Filtra `is_pluviometric` + `is_operating`. Se `state_filter` fornecido
-    busca só naquele UF (muito mais rápido que varrer BR inteiro — cada UF
-    tem 3-10k estações). Se nenhuma candidata no estado, levanta AnaError.
+    Filtra `is_pluviometric` + `is_operating`. Busca só no UF fornecido
+    (inventário é paginado por UF — cada UF tem 3-10k estações).
     """
     if not state_filter:
         raise AnaError(
-            "ANA nearest_pluvio_station requer state_filter — "
+            "ANA nearest_pluvio_stations requer state_filter — "
             "inventário é paginado por UF."
         )
+    if max_results < 1:
+        raise AnaError(f"max_results deve ser >=1, recebi {max_results}")
 
     stations = await list_stations_for_state(state_filter)
     candidates = [s for s in stations if s.is_pluviometric and s.is_operating]
@@ -361,13 +366,33 @@ async def nearest_pluvio_station(
         )
 
     target = (lat, lon)
-    best: tuple[AnaStation, float] | None = None
-    for st in candidates:
-        d = geodesic(target, (st.latitude, st.longitude)).kilometers
-        if best is None or d < best[1]:
-            best = (st, d)
-    assert best is not None
-    return best
+    ranked = sorted(
+        (
+            (st, geodesic(target, (st.latitude, st.longitude)).kilometers)
+            for st in candidates
+        ),
+        key=lambda p: p[1],
+    )
+    return ranked[:max_results]
+
+
+async def nearest_pluvio_station(
+    lat: float, lon: float, *, state_filter: str | None = None
+) -> tuple[AnaStation, float]:
+    """Retorna (estação pluviométrica mais próxima, distância_km).
+
+    Wrapper em cima de `nearest_pluvio_stations` que devolve só a top-1.
+    Mantido como API pública por compat (smoke_ana.py, chamadas diretas).
+    """
+    if not state_filter:
+        raise AnaError(
+            "ANA nearest_pluvio_station requer state_filter — "
+            "inventário é paginado por UF."
+        )
+    results = await nearest_pluvio_stations(
+        lat, lon, state_filter=state_filter, max_results=1
+    )
+    return results[0]
 
 
 # ---------------------------------------------------------------------------
@@ -515,38 +540,83 @@ async def get_historical_for_coords(
     *,
     lookback_months: int = 6,
     state_filter: str,
+    max_station_candidates: int = 5,
 ) -> tuple[AnaStation, float, list[DailyForecast]]:
     """Retorna (estação escolhida, distância_km, dias de chuva).
 
     **Escopo:** chuva convencional — dados observados, com lag 2-6 meses.
     Não serve pra alerta em tempo real; serve pra reanálise histórica e
     validação cruzada com Open-Meteo em relatórios.
+
+    **Fallback de estação:** muitas estações marcadas `is_pluviometric` +
+    `is_operating` no inventário não têm série convencional publicada pra
+    janela recente (coleta manual atrasada, estação recém-ativa, dados
+    ainda em consistência). Em vez de desistir na top-1, iteramos as
+    `max_station_candidates` mais próximas e retornamos a primeira com
+    dados — o raio típico entre as top-5 é < 30 km, ainda climatologicamente
+    representativo pra maioria das barragens.
     """
     if lookback_months < 1:
         raise AnaError(f"lookback_months deve ser >=1, recebi {lookback_months}")
 
-    station, distance_km = await nearest_pluvio_station(
-        lat, lon, state_filter=state_filter
+    candidates = await nearest_pluvio_stations(
+        lat, lon, state_filter=state_filter, max_results=max_station_candidates
     )
 
     end = date.today()
-    # lookback_months aproximado: 30 dias/mês. Melhor dar um pouco a mais
-    # pra garantir que eventos na borda do mês entrem.
+    # lookback_months aproximado: 31 dias/mês (pior caso). Melhor dar um pouco
+    # a mais pra garantir que eventos na borda do mês entrem.
     start = end - timedelta(days=lookback_months * 31)
     start, end = _clamp_window_to_366d(start, end)
 
-    days = await get_rainfall(station.code, start, end)
-    log.info(
-        "ana_historical_for_coords",
-        lat=lat,
-        lon=lon,
-        station=station.code,
-        station_name=station.name,
-        distance_km=round(distance_km, 2),
-        lookback_months=lookback_months,
-        days=len(days),
+    last_error: Exception | None = None
+    for idx, (station, distance_km) in enumerate(candidates, start=1):
+        try:
+            days = await get_rainfall(station.code, start, end)
+        except AnaError as exc:
+            last_error = exc
+            log.warning(
+                "ana_station_fetch_failed",
+                station=station.code,
+                rank=idx,
+                distance_km=round(distance_km, 2),
+                error=str(exc),
+            )
+            continue
+
+        if not days:
+            log.info(
+                "ana_station_no_data",
+                station=station.code,
+                station_name=station.name,
+                rank=idx,
+                distance_km=round(distance_km, 2),
+            )
+            continue
+
+        log.info(
+            "ana_historical_for_coords",
+            lat=lat,
+            lon=lon,
+            station=station.code,
+            station_name=station.name,
+            rank=idx,
+            distance_km=round(distance_km, 2),
+            lookback_months=lookback_months,
+            days=len(days),
+            candidates_tried=idx,
+            candidates_total=len(candidates),
+        )
+        return station, distance_km, days
+
+    msg = (
+        f"Nenhuma das {len(candidates)} estações mais próximas de "
+        f"({lat}, {lon}) em {state_filter} tem dados pra janela "
+        f"{start.isoformat()}..{end.isoformat()}."
     )
-    return station, distance_km, days
+    if last_error:
+        msg += f" Último erro: {last_error}"
+    raise AnaError(msg)
 
 
 __all__ = [
@@ -555,6 +625,7 @@ __all__ = [
     "AnaStation",
     "list_stations_for_state",
     "nearest_pluvio_station",
+    "nearest_pluvio_stations",
     "get_rainfall",
     "get_historical_for_coords",
 ]

@@ -23,6 +23,15 @@ class Settings(BaseSettings):
     app_secret_key: str = "change-me"
     app_base_url: str = "http://localhost:8080"
 
+    # --- Error tracking (opcional) ---
+    # Se SENTRY_DSN não estiver setado, error tracking vira no-op silencioso.
+    # Setar em produção pra capturar exceções de dispatchers best-effort
+    # (fetch climate, news, notifications) que hoje só vão pra log.
+    sentry_dsn: str | None = None
+    # Sample rate: 1.0 captura tudo (recomendado pra começar). Diminua só
+    # se Sentry estourar quota.
+    sentry_traces_sample_rate: float = 0.0  # transactions caras; default off
+
     # --- Auth ---
     basic_auth_user: str = "admin"
     basic_auth_pass: str = "change-me"

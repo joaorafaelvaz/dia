@@ -9,7 +9,7 @@ Also exposes:
 """
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import and_, select
@@ -146,7 +146,7 @@ async def save_forecasts(
             existing.risk_label = label
             existing.alert_threshold_exceeded = exceeded
             existing.raw_data = raw
-            existing.generated_at = datetime.utcnow()
+            existing.generated_at = datetime.now(timezone.utc)
         else:
             session.add(
                 Forecast(

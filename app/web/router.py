@@ -125,7 +125,7 @@ async def _dashboard_context(session) -> dict:
         "recent_events": recent_events,
         "upcoming_forecasts": upcoming_forecasts,
         "counts": counts,
-        "now": datetime.utcnow(),
+        "now": datetime.now(timezone.utc),
     }
 
 

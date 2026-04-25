@@ -10,6 +10,7 @@ from app.dependencies import AuthUser, SessionDep
 from app.models.client import Client
 from app.models.dam import Dam
 from app.schemas.client import ClientCreate, ClientRead, ClientUpdate
+from app.utils.audit import record_audit
 
 router = APIRouter(prefix="/clients", tags=["clients"])
 
@@ -44,7 +45,7 @@ async def list_clients(
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_client(
-    payload: ClientCreate, request: Request, session: SessionDep, _: AuthUser
+    payload: ClientCreate, request: Request, session: SessionDep, user: AuthUser
 ) -> Response:
     client = Client(**payload.model_dump())
     session.add(client)
@@ -57,6 +58,11 @@ async def create_client(
             detail=f"Já existe um cliente com nome '{payload.name}'",
         )
     await session.refresh(client)
+    await record_audit(
+        session, user=user, action="client.create",
+        entity_type="client", entity_id=client.id,
+        details={"name": client.name},
+    )
     out = ClientRead.model_validate(client)
     out.dam_count = 0
 
@@ -91,12 +97,13 @@ async def update_client(
     client_id: int,
     payload: ClientUpdate,
     session: SessionDep,
-    _: AuthUser,
+    user: AuthUser,
 ) -> ClientRead:
     client = await session.get(Client, client_id)
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
-    for key, value in payload.model_dump(exclude_unset=True).items():
+    changes = payload.model_dump(exclude_unset=True)
+    for key, value in changes.items():
         setattr(client, key, value)
     try:
         await session.commit()
@@ -107,13 +114,18 @@ async def update_client(
             detail="Conflito de nome — já existe outro cliente com esse name",
         )
     await session.refresh(client)
+    await record_audit(
+        session, user=user, action="client.update",
+        entity_type="client", entity_id=client.id,
+        details={"changes": changes},
+    )
     out = ClientRead.model_validate(client)
     return out
 
 
 @router.delete("/{client_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_client(
-    client_id: int, session: SessionDep, _: AuthUser
+    client_id: int, session: SessionDep, user: AuthUser
 ) -> Response:
     """Hard delete só se não houver dams associadas. Senão 409.
 
@@ -139,6 +151,12 @@ async def delete_client(
             ),
         )
 
+    client_name = client.name
     await session.delete(client)
     await session.commit()
+    await record_audit(
+        session, user=user, action="client.delete",
+        entity_type="client", entity_id=client_id,
+        details={"name": client_name},
+    )
     return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -87,14 +87,35 @@ class Dam(Base):
         Antes era coluna; depois da migration 0004 vira proxy pra
         client.name. Quem precisa filtrar/ordenar SQL deve usar
         Client.name diretamente via JOIN.
+
+        Tolera dam detached da session: se SQLAlchemy lançar
+        DetachedInstanceError ao tentar lazy-load `self.client`, retorna
+        string vazia em vez de crashar. Em prod isso só acontece quando
+        callsite passou Dam fora do escopo da session que carregou —
+        relatórios, notificações e templates fazem selectin eager-load,
+        então este fallback é defesa em profundidade.
         """
-        return self.client.name if self.client else ""
+        from sqlalchemy.exc import MissingGreenlet
+        from sqlalchemy.orm.exc import DetachedInstanceError
+        try:
+            return self.client.name if self.client else ""
+        except (DetachedInstanceError, MissingGreenlet):
+            return ""
 
     @property
     def client_name(self) -> str | None:
         """Helper pra schemas Pydantic (`DamRead.client_name`) lerem via
-        from_attributes sem precisar JOIN explícito."""
-        return self.client.name if self.client else None
+        from_attributes sem precisar JOIN explícito.
+
+        Mesmo fallback de detached que `owner_group` — retorna None em
+        vez de crashar se a session já fechou.
+        """
+        from sqlalchemy.exc import MissingGreenlet
+        from sqlalchemy.orm.exc import DetachedInstanceError
+        try:
+            return self.client.name if self.client else None
+        except (DetachedInstanceError, MissingGreenlet):
+            return None
 
     def __repr__(self) -> str:
         return f"<Dam id={self.id} name={self.name!r} client_id={self.client_id}>"

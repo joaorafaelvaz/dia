@@ -1,7 +1,7 @@
 """Alerts: list active, acknowledge."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import select
@@ -11,6 +11,7 @@ from app.models.alert import Alert
 from app.models.client import Client
 from app.models.dam import Dam
 from app.schemas.alert import AlertAcknowledge, AlertRead
+from app.utils.audit import record_audit
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
 
@@ -50,9 +51,18 @@ async def acknowledge_alert(
     if not alert:
         raise HTTPException(status_code=404, detail="Alert not found")
     alert.acknowledged = True
-    alert.acknowledged_at = datetime.utcnow()
+    alert.acknowledged_at = datetime.now(timezone.utc)
     alert.acknowledged_by = payload.acknowledged_by or user
     alert.is_active = False
     await session.commit()
     await session.refresh(alert)
+    await record_audit(
+        session, user=user, action="alert.acknowledge",
+        entity_type="alert", entity_id=alert.id,
+        details={
+            "acknowledged_by": alert.acknowledged_by,
+            "severity": alert.severity,
+            "alert_type": alert.alert_type,
+        },
+    )
     return alert

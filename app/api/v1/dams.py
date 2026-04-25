@@ -19,6 +19,7 @@ from app.models.forecast import Forecast
 from app.schemas.dam import DamCreate, DamRead, DamUpdate
 from app.schemas.event import ClimateEventRead
 from app.schemas.forecast import ForecastRead
+from app.utils.audit import record_audit
 from app.utils.logging import get_logger
 
 log = get_logger(__name__)
@@ -47,7 +48,7 @@ async def list_dams(
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_dam(
-    payload: DamCreate, request: Request, session: SessionDep, _: AuthUser
+    payload: DamCreate, request: Request, session: SessionDep, user: AuthUser
 ) -> Response:
     """Cria barragem e dispara coleta climática inicial (best-effort).
 
@@ -81,6 +82,12 @@ async def create_dam(
             error=str(exc),
         )
 
+    await record_audit(
+        session, user=user, action="dam.create",
+        entity_type="dam", entity_id=dam.id,
+        details={"name": dam.name, "client_id": dam.client_id, "state": dam.state},
+    )
+
     out = DamRead.model_validate(dam)
     headers = (
         {"HX-Redirect": f"/dams/{dam.id}"}
@@ -104,7 +111,7 @@ async def get_dam(dam_id: int, session: SessionDep, _: AuthUser) -> Dam:
 
 @router.delete("/{dam_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_dam(
-    dam_id: int, request: Request, session: SessionDep, _: AuthUser
+    dam_id: int, request: Request, session: SessionDep, user: AuthUser
 ) -> Response:
     """Hard delete da barragem.
 
@@ -122,9 +129,16 @@ async def delete_dam(
     dam = await session.get(Dam, dam_id)
     if not dam:
         raise HTTPException(status_code=404, detail="Dam not found")
+    dam_name = dam.name
+    dam_client_id = dam.client_id
     await session.delete(dam)
     await session.commit()
-    log.info("dam_deleted", dam_id=dam_id, name=dam.name)
+    log.info("dam_deleted", dam_id=dam_id, name=dam_name)
+    await record_audit(
+        session, user=user, action="dam.delete",
+        entity_type="dam", entity_id=dam_id,
+        details={"name": dam_name, "client_id": dam_client_id},
+    )
 
     if request.headers.get("HX-Request") == "true":
         return Response(status_code=status.HTTP_204_NO_CONTENT, headers={"HX-Refresh": "true"})
@@ -137,7 +151,7 @@ async def update_dam(
     payload: DamUpdate,
     request: Request,
     session: SessionDep,
-    _: AuthUser,
+    user: AuthUser,
 ) -> Response:
     dam = await session.get(Dam, dam_id)
     if not dam:
@@ -154,6 +168,22 @@ async def update_dam(
         setattr(dam, key, value)
     await session.commit()
     await session.refresh(dam)
+
+    # Distinção semântica: update vs deactivate. Operador no menu cliente
+    # clica "Desativar" e isso dispara PATCH com {is_active: false}; pra
+    # auditoria, vale rotular distinto pra busca futura por "quem desativou X".
+    is_deactivation = update_data.get("is_active") is False
+    is_reactivation = update_data.get("is_active") is True and len(update_data) == 1
+    action = (
+        "dam.deactivate" if is_deactivation
+        else "dam.reactivate" if is_reactivation
+        else "dam.update"
+    )
+    await record_audit(
+        session, user=user, action=action,
+        entity_type="dam", entity_id=dam.id,
+        details={"changes": update_data},
+    )
 
     out = DamRead.model_validate(dam)
     headers = (

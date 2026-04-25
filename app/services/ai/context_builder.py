@@ -279,6 +279,7 @@ async def build_context(
     forecast_days: int = 7,
     min_event_severity: int = 2,
     min_forecast_risk: int = 3,
+    include_test: bool = False,
 ) -> ReportContext:
     """Busca no banco e monta o `ReportContext` para o relatório.
 
@@ -289,6 +290,9 @@ async def build_context(
         forecast_days: janela futura considerada (previsões).
         min_event_severity: corta eventos abaixo desse valor (reduz ruído).
         min_forecast_risk: idem para forecasts.
+        include_test: se False (default), filtra Alert/Forecast com
+            `is_test=True` — relatórios automáticos NUNCA passam True. Geração
+            manual via API pode optar por incluir pra validar pipeline.
 
     Returns:
         `ReportContext` pronto pra passar ao `report_generator`.
@@ -364,16 +368,17 @@ async def build_context(
     ]
 
     # Previsões — só as de alto risco, ordenadas por data asc (cronológico).
+    fc_conditions = [
+        Forecast.dam_id.in_(resolved_ids),
+        Forecast.forecast_date >= period_end,
+        Forecast.forecast_date <= forecast_end,
+        Forecast.risk_level >= min_forecast_risk,
+    ]
+    if not include_test:
+        fc_conditions.append(Forecast.is_test.is_(False))
     fc_stmt = (
         select(Forecast)
-        .where(
-            and_(
-                Forecast.dam_id.in_(resolved_ids),
-                Forecast.forecast_date >= period_end,
-                Forecast.forecast_date <= forecast_end,
-                Forecast.risk_level >= min_forecast_risk,
-            )
-        )
+        .where(and_(*fc_conditions))
         .order_by(Forecast.forecast_date.asc(), Forecast.risk_level.desc())
     )
     fcs = (await session.execute(fc_stmt)).scalars().all()
@@ -393,9 +398,12 @@ async def build_context(
     ]
 
     # Alertas ativos.
+    alerts_conditions = [Alert.dam_id.in_(resolved_ids), Alert.is_active.is_(True)]
+    if not include_test:
+        alerts_conditions.append(Alert.is_test.is_(False))
     alerts_stmt = (
         select(Alert)
-        .where(and_(Alert.dam_id.in_(resolved_ids), Alert.is_active.is_(True)))
+        .where(and_(*alerts_conditions))
         .order_by(Alert.severity.desc(), Alert.created_at.desc())
     )
     alerts = (await session.execute(alerts_stmt)).scalars().all()

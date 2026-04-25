@@ -33,3 +33,4 @@ class ForecastRead(ForecastBase):
     id: int
     generated_at: datetime
     created_at: datetime
+    is_test: bool

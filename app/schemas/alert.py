@@ -33,3 +33,4 @@ class AlertRead(AlertBase):
     created_at: datetime
     notified_whatsapp: bool
     notified_email: bool
+    is_test: bool

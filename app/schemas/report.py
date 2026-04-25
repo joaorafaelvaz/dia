@@ -23,6 +23,9 @@ class ReportGenerateRequest(BaseModel):
     scope: Literal["gerdau", "kinross", "all", "custom"]
     dam_ids: list[int] | None = None
     period_days: int = Field(default=30, ge=1, le=365)
+    # Default False: cron de briefing/cliente NUNCA passa True. Manual pode
+    # incluir pra exercitar context_builder com dado sintético do test harness.
+    include_test: bool = False
 
 
 class ReportRead(ReportBase):

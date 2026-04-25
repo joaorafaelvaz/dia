@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+{% block title %}Test Harness · DIA{% endblock %}
+{% block content %}
+<div class="mb-6 flex items-center justify-between">
+  <div>
+    <h1 class="text-2xl font-semibold flex items-center gap-2">
+      <span>🧪 Test Harness</span>
+      <span class="rounded bg-amber-900/60 px-2 py-0.5 text-xs font-medium text-amber-100 border border-amber-700">teste</span>
+    </h1>
+    <p class="text-sm text-slate-400">
+      Inserção manual de alertas e forecasts sintéticos pra validar dispatcher,
+      pipeline de detecção e geração de relatórios.
+    </p>
+  </div>
+  <button
+    class="rounded border border-rose-700 bg-rose-900/40 px-3 py-1.5 text-sm font-medium text-rose-100 hover:bg-rose-900/60"
+    hx-delete="/api/v1/test-harness/data?older_than_days=7"
+    hx-confirm="Apagar permanentemente todos os alertas/forecasts de teste com mais de 7 dias?"
+    hx-target="#th-purge-result"
+    hx-swap="innerHTML"
+  >Limpar testes &gt;7d</button>
+</div>
+
+<div id="th-purge-result" class="mb-4"></div>
+
+<div class="grid gap-6 lg:grid-cols-3">
+  <!-- Coluna principal: 2 abas -->
+  <div class="lg:col-span-2" x-data="{ tab: 'alert' }">
+    <div class="mb-3 flex gap-2 border-b border-slate-800">
+      <button
+        @click="tab='alert'"
+        :class="tab==='alert' ? 'border-amber-500 text-amber-300' : 'border-transparent text-slate-400 hover:text-slate-200'"
+        class="border-b-2 px-3 py-2 text-sm font-medium"
+      >Alerta direto</button>
+      <button
+        @click="tab='forecast'"
+        :class="tab==='forecast' ? 'border-amber-500 text-amber-300' : 'border-transparent text-slate-400 hover:text-slate-200'"
+        class="border-b-2 px-3 py-2 text-sm font-medium"
+      >Forecast sintético</button>
+    </div>
+
+    <!-- Modo A: alerta direto -->
+    <section x-show="tab==='alert'" x-cloak class="rounded border border-slate-800 bg-slate-900 p-4">
+      <p class="mb-3 text-xs text-slate-400">
+        Insere Alert(is_test=True). Sweep do dispatcher pega no próximo tick (≤5min)
+        e envia notificação se severity ≥ threshold (WhatsApp ≥3, email ≥4).
+      </p>
+      <form
+        hx-post="/api/v1/test-harness/alerts"
+        hx-ext="json-enc"
+        hx-target="#th-alert-result"
+        hx-swap="innerHTML"
+        class="space-y-3"
+      >
+        <div class="grid gap-3 sm:grid-cols-2">
+          <label class="block text-sm">
+            <span class="mb-1 block text-slate-400">Barragem</span>
+            <select name="dam_id" required class="w-full rounded border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm">
+              {% for dam in dams %}
+                <option value="{{ dam.id }}">{{ dam.name }} — {{ dam.owner_group }} ({{ dam.municipality }}/{{ dam.state }})</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="block text-sm">
+            <span class="mb-1 block text-slate-400">Tipo</span>
+            <select name="alert_type" class="w-full rounded border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm">
+              <option value="threshold_exceeded">threshold_exceeded</option>
+              <option value="forecast_warning">forecast_warning</option>
+              <option value="news_event">news_event</option>
+            </select>
+          </label>
+          <label class="block text-sm">
+            <span class="mb-1 block text-slate-400">Severidade (1-5)</span>
+            <input
+              type="number" name="severity" min="1" max="5" value="4" required
+              class="w-full rounded border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm"
+            />
+          </label>
+          <label class="block text-sm">
+            <span class="mb-1 block text-slate-400">Data prevista (opcional)</span>
+            <input type="date" name="forecast_date" class="w-full rounded border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm" />
+          </label>
+        </div>
+        <label class="block text-sm">
+          <span class="mb-1 block text-slate-400">Título</span>
+          <input
+            type="text" name="title" required maxlength="300"
+            value="[TESTE] Alerta sintético"
+            class="w-full rounded border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm"
+          />
+        </label>
+        <label class="block text-sm">
+          <span class="mb-1 block text-slate-400">Mensagem</span>
+          <textarea
+            name="message" required rows="3"
+            class="w-full rounded border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm"
+          >Alerta gerado pelo Test Harness para validação de gatilhos. Ignorar em operação real.</textarea>
+        </label>
+        <label class="flex items-center gap-2 text-sm text-slate-300">
+          <input type="checkbox" name="send_notification" value="true" checked class="accent-amber-500" />
+          <span>Enviar notificação real (WhatsApp/email via dispatcher)</span>
+        </label>
+        <button class="rounded bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700">
+          Criar alerta de teste
+        </button>
+      </form>
+    </section>
+
+    <!-- Modo B: forecast sintético -->
+    <section x-show="tab==='forecast'" x-cloak class="rounded border border-slate-800 bg-slate-900 p-4">
+      <p class="mb-3 text-xs text-slate-400">
+        Insere Forecast(is_test=True) com precipitação que você definir. O aggregator
+        é chamado síncrono — se cruzar threshold (ajustado por dam_type/dpa), gera
+        Alert também marcado is_test. Útil pra exercitar pipeline detecção→alerta→notif.
+      </p>
+      <form
+        hx-post="/api/v1/test-harness/forecasts"
+        hx-ext="json-enc"
+        hx-target="#th-alert-result"
+        hx-swap="innerHTML"
+        class="space-y-3"
+      >
+        <div class="grid gap-3 sm:grid-cols-2">
+          <label class="block text-sm">
+            <span class="mb-1 block text-slate-400">Barragem</span>
+            <select name="dam_id" required class="w-full rounded border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm">
+              {% for dam in dams %}
+                <option value="{{ dam.id }}">{{ dam.name }} — {{ dam.owner_group }} ({{ dam.municipality }}/{{ dam.state }})</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="block text-sm">
+            <span class="mb-1 block text-slate-400">Data da previsão</span>
+            <input
+              type="date" name="forecast_date" required value="{{ tomorrow_iso }}"
+              class="w-full rounded border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm"
+            />
+          </label>
+        </div>
+        <label class="block text-sm">
+          <span class="mb-1 block text-slate-400">
+            Precipitação prevista (mm) —
+            <span class="text-slate-500">50=Mod, 100=Alto, 150=MuitoAlto, 250=Crítico</span>
+          </span>
+          <input
+            type="number" name="max_precipitation_mm" min="0" max="500" step="10" value="180" required
+            class="w-full rounded border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm"
+          />
+        </label>
+        <label class="flex items-center gap-2 text-sm text-slate-300">
+          <input type="checkbox" name="send_notification" value="true" checked class="accent-amber-500" />
+          <span>Enviar notificação real se um Alert for gerado</span>
+        </label>
+        <button class="rounded bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700">
+          Injetar forecast sintético
+        </button>
+      </form>
+    </section>
+
+    <!-- Resultado do POST aparece aqui -->
+    <div id="th-alert-result" class="mt-4"></div>
+  </div>
+
+  <!-- Coluna lateral: últimos testes -->
+  <aside class="rounded border border-slate-800 bg-slate-900 p-4">
+    <h2 class="mb-3 text-sm font-semibold text-slate-200">Últimos testes ({{ test_alerts|length }})</h2>
+    {% if test_alerts %}
+      <ul class="space-y-2 text-xs">
+        {% for a in test_alerts %}
+          <li class="rounded border border-slate-800 bg-slate-950/50 px-2 py-1.5">
+            <div class="flex items-center justify-between">
+              <span class="font-mono text-slate-400">#{{ a.id }}</span>
+              <span class="rounded bg-amber-900/60 px-1.5 py-0.5 text-[10px] text-amber-100 border border-amber-700">TESTE</span>
+            </div>
+            <div class="mt-1 line-clamp-2 text-slate-200">{{ a.title }}</div>
+            <div class="mt-0.5 text-[10px] text-slate-500">
+              sev {{ a.severity }} · {{ a.alert_type }} ·
+              {% if a.is_active %}<span class="text-amber-400">ativo</span>{% else %}<span class="text-slate-500">inativo</span>{% endif %}
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="text-xs text-slate-500">Nenhum alerta de teste ainda. Crie um pra começar.</p>
+    {% endif %}
+    <hr class="my-3 border-slate-800" />
+    <p class="text-[11px] text-slate-500 leading-snug">
+      <strong class="text-slate-400">Relatórios:</strong> cron semanal/mensal NÃO incluem
+      registros marcados <code class="text-amber-300">is_test=True</code>. Pra validar
+      relatório com dado de teste, gere manual via
+      <a href="/reports" class="text-brand hover:underline">/reports</a> com a flag
+      <code class="text-amber-300">include_test=true</code>.
+    </p>
+  </aside>
+</div>
+{% endblock %}

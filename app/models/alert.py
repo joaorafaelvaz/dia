@@ -52,6 +52,13 @@ class Alert(Base):
     notified_whatsapp: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     notified_email: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
+    # Test harness: alertas inseridos manualmente pra validar dispatcher e
+    # relatórios. Cron de relatórios filtra com is_test=False; dashboard exibe
+    # com badge laranja. Limpeza periódica via DELETE /api/v1/test-harness/data.
+    is_test: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, index=True
+    )
+
     dam: Mapped[Dam] = relationship(back_populates="alerts")
 
     def __repr__(self) -> str:

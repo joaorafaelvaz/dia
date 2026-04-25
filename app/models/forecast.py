@@ -63,6 +63,12 @@ class Forecast(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
+    # Test harness: forecasts sintéticos pra exercitar pipeline de detecção.
+    # Quando True, o aggregator propaga is_test pro Alert resultante.
+    is_test: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, index=True
+    )
+
     dam: Mapped[Dam] = relationship(back_populates="forecasts")
 
     def __repr__(self) -> str:

@@ -245,6 +245,44 @@ async def events_list(
     )
 
 
+@web_router.get("/test-harness", response_class=HTMLResponse)
+async def test_harness_page(
+    request: Request, session: SessionDep, _: AuthUser
+) -> HTMLResponse:
+    """Página de inserção manual de alertas/forecasts sintéticos."""
+    dams = list(
+        (
+            await session.execute(
+                select(Dam).where(Dam.is_active.is_(True)).order_by(Dam.name)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    test_alerts = list(
+        (
+            await session.execute(
+                select(Alert)
+                .where(Alert.is_test.is_(True))
+                .order_by(Alert.created_at.desc())
+                .limit(20)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    tomorrow_iso = (date.today() + timedelta(days=2)).isoformat()
+    return templates.TemplateResponse(
+        request,
+        "test_harness.html",
+        {
+            "dams": dams,
+            "test_alerts": test_alerts,
+            "tomorrow_iso": tomorrow_iso,
+        },
+    )
+
+
 @web_router.get("/reports", response_class=HTMLResponse)
 async def reports_list(
     request: Request,

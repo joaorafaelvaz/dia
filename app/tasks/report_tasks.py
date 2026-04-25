@@ -55,6 +55,7 @@ async def _generate_one(
     dam_ids: list[int] | None,
     period_days: int,
     forecast_days: int,
+    include_test: bool = False,
 ) -> None:
     """Preenche um `Report` já criado com `status='generating'`.
 
@@ -81,6 +82,7 @@ async def _generate_one(
                 dam_ids=dam_ids,
                 period_days=period_days,
                 forecast_days=forecast_days,
+                include_test=include_test,
             )
 
             title_suffix = default_title(report_type, scope, period_days)
@@ -154,6 +156,7 @@ def generate_report(
     dam_ids: list[int] | None = None,
     period_days: int = 30,
     forecast_days: int = 7,
+    include_test: bool = False,
 ) -> dict[str, Any]:
     """Entry point Celery: chama o worker async e devolve um dict curto."""
     try:
@@ -165,6 +168,7 @@ def generate_report(
                 dam_ids=dam_ids,
                 period_days=period_days,
                 forecast_days=forecast_days,
+                include_test=include_test,
             )
         )
         return {"report_id": report_id, "status": "ready"}

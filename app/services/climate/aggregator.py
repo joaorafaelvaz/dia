@@ -284,6 +284,8 @@ async def check_and_create_alerts(session: AsyncSession, dam: Dam) -> list[Alert
             forecast_date=fc.forecast_date,
             is_active=True,
             expires_at=datetime.combine(fc.forecast_date + timedelta(days=1), datetime.min.time()),
+            # Propaga: forecast sintético (test harness) gera alert sintético.
+            is_test=fc.is_test,
         )
         session.add(alert)
         created.append(alert)

@@ -107,6 +107,7 @@ async def generate_report(
         dam_ids=payload.dam_ids,
         period_days=payload.period_days,
         forecast_days=7,
+        include_test=payload.include_test,
     )
     log.info(
         "report_generate_dispatched",

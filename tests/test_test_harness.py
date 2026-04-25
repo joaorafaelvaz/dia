@@ -206,3 +206,43 @@ async def test_purge_deletes_only_old_test_records(
     assert old_real.id in surviving_ids
     assert new_test.id in surviving_ids
     assert old_test.id not in surviving_ids
+
+
+@pytest.mark.asyncio
+async def test_purge_all_resets_to_pre_test_state(
+    api_client, async_session, sample_dam
+):
+    """purge_all=true ignora idade e apaga 100% dos is_test=True.
+
+    Cobre o botão 'Reset total' do menu /test-harness — operador quer
+    reverter o sistema ao estado pré-testes, inclusive registros criados
+    nos últimos segundos. Reais nunca devem ser tocados.
+    """
+    real_alert = make_alert(
+        dam_id=sample_dam.id, title="Real produção", is_test=False
+    )
+    fresh_test_alert = make_alert(
+        dam_id=sample_dam.id, title="[TESTE] criado agora", is_test=True
+    )
+    fresh_test_fc = make_forecast(
+        dam_id=sample_dam.id, max_precipitation_mm=200.0, is_test=True
+    )
+    async_session.add_all([real_alert, fresh_test_alert, fresh_test_fc])
+    await async_session.commit()
+
+    resp = await api_client.delete("/api/v1/test-harness/data?purge_all=true")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["alerts_deleted"] == 1
+    assert body["forecasts_deleted"] == 1
+
+    surviving_alerts = set(
+        (await async_session.execute(select(Alert.id))).scalars().all()
+    )
+    surviving_fcs = set(
+        (await async_session.execute(select(Forecast.id))).scalars().all()
+    )
+    # Real preservado, todo lixo de teste foi.
+    assert real_alert.id in surviving_alerts
+    assert fresh_test_alert.id not in surviving_alerts
+    assert fresh_test_fc.id not in surviving_fcs

@@ -12,13 +12,23 @@
       pipeline de detecção e geração de relatórios.
     </p>
   </div>
-  <button
-    class="rounded border border-rose-700 bg-rose-900/40 px-3 py-1.5 text-sm font-medium text-rose-100 hover:bg-rose-900/60"
-    hx-delete="/api/v1/test-harness/data?older_than_days=7"
-    hx-confirm="Apagar permanentemente todos os alertas/forecasts de teste com mais de 7 dias?"
-    hx-target="#th-purge-result"
-    hx-swap="innerHTML"
-  >Limpar testes &gt;7d</button>
+  <div class="flex items-center gap-2">
+    <button
+      class="rounded border border-rose-700 bg-rose-900/40 px-3 py-1.5 text-sm font-medium text-rose-100 hover:bg-rose-900/60"
+      hx-delete="/api/v1/test-harness/data?older_than_days=7"
+      hx-confirm="Apagar permanentemente todos os alertas/forecasts de teste com mais de 7 dias?"
+      hx-target="#th-purge-result"
+      hx-swap="innerHTML"
+    >Limpar testes &gt;7d</button>
+    <button
+      class="rounded bg-rose-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-rose-800 ring-1 ring-rose-400/40"
+      hx-delete="/api/v1/test-harness/data?purge_all=true"
+      hx-confirm="ATENÇÃO: isso apaga TODOS os alertas e forecasts marcados como teste, independente da idade. Reverte o sistema ao estado pré-testes. Continuar?"
+      hx-target="#th-purge-result"
+      hx-swap="innerHTML"
+      title="Apaga 100% dos registros is_test=True — reverte sistema ao estado original"
+    >🗑 Reset total</button>
+  </div>
 </div>
 
 <div id="th-purge-result" class="mb-4"></div>

@@ -223,32 +223,39 @@ async def purge_test_data(
     session: SessionDep,
     _: AuthUser,
     older_than_days: int = Query(default=7, ge=0, le=365),
+    purge_all: bool = Query(
+        default=False,
+        description="Se true, ignora older_than_days e apaga TODOS os "
+        "registros is_test=True (reset total ao estado pré-testes).",
+    ),
 ) -> TestHarnessPurgeResult:
-    """Hard delete de Alert/Forecast com is_test=True mais antigos que N dias.
+    """Hard delete de Alert/Forecast com is_test=True.
 
-    `older_than_days=0` purga TUDO (use com cuidado em produção). Default
-    7d é compatível com a regra padrão de retenção do operador médio.
+    Modo padrão: filtra por `older_than_days` (default 7d). Modo `purge_all=true`:
+    apaga tudo que tem is_test=True ignorando idade — botão "reverter ao estado
+    original" do menu /test-harness.
     """
-    cutoff = datetime.now(tz=timezone.utc) - timedelta(days=older_than_days)
-
     # synchronize_session=False: deixa o SQL executar server-side e não tenta
     # avaliar o WHERE em Python. Sem isso o ORM dá TypeError comparando
     # datetime naive vs aware quando timestamps vêm de drivers diferentes
     # (SQLite ⇄ Postgres). O custo é pequeno: a session vê stale rows até
     # o próximo refresh, e nesse endpoint não usamos os objetos depois.
-    alerts_stmt = delete(Alert).where(
-        Alert.is_test.is_(True), Alert.created_at < cutoff
-    )
+    alert_conditions = [Alert.is_test.is_(True)]
+    fc_conditions = [Forecast.is_test.is_(True)]
+    if not purge_all:
+        cutoff = datetime.now(tz=timezone.utc) - timedelta(days=older_than_days)
+        alert_conditions.append(Alert.created_at < cutoff)
+        fc_conditions.append(Forecast.created_at < cutoff)
+
     alerts_result = await session.execute(
-        alerts_stmt, execution_options={"synchronize_session": False}
+        delete(Alert).where(*alert_conditions),
+        execution_options={"synchronize_session": False},
     )
     alerts_deleted = alerts_result.rowcount or 0
 
-    fcs_stmt = delete(Forecast).where(
-        Forecast.is_test.is_(True), Forecast.created_at < cutoff
-    )
     fcs_result = await session.execute(
-        fcs_stmt, execution_options={"synchronize_session": False}
+        delete(Forecast).where(*fc_conditions),
+        execution_options={"synchronize_session": False},
     )
     fcs_deleted = fcs_result.rowcount or 0
 
@@ -256,12 +263,13 @@ async def purge_test_data(
 
     log.info(
         "test_harness_purged",
-        older_than_days=older_than_days,
+        purge_all=purge_all,
+        older_than_days=older_than_days if not purge_all else None,
         alerts_deleted=alerts_deleted,
         forecasts_deleted=fcs_deleted,
     )
     return TestHarnessPurgeResult(
-        older_than_days=older_than_days,
+        older_than_days=0 if purge_all else older_than_days,
         alerts_deleted=alerts_deleted,
         forecasts_deleted=fcs_deleted,
     )

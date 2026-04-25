@@ -2,12 +2,16 @@
 
 Fase 1: stubbed — returns False unless NOTIFICATIONS_ENABLED=true AND SMTP
 credentials are configured. Real template + retry behavior lands in Fase 4.
+
+Note: `aiosmtplib` é import lazy dentro de `send_alert_email`. Em produção
+(Docker) está sempre instalado; em hosts de dev/CI sem o pacote, o módulo
+ainda importa para que dispatcher e tests possam ser carregados — só a
+chamada de envio em si falharia (com `notifications_enabled=False` essa
+chamada nunca acontece).
 """
 from __future__ import annotations
 
 from email.message import EmailMessage
-
-import aiosmtplib
 
 from app.config import settings
 from app.models.alert import Alert
@@ -52,6 +56,7 @@ async def send_alert_email(alert: Alert, dam: Dam) -> bool:
         return False
 
     msg = _build_email(alert, dam)
+    import aiosmtplib  # noqa: PLC0415 — lazy: dev hosts podem não ter o pacote
     try:
         await aiosmtplib.send(
             msg,

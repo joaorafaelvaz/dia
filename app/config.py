@@ -82,6 +82,15 @@ class Settings(BaseSettings):
     smtp_pass: str = ""
     smtp_from: str = "dia@fractaleng.com.br"
     alert_email_to: str = ""
+    # Janela mínima entre notificações para a mesma combinação
+    # (dam_id, alert_type). Evita inundar WhatsApp/email quando uma chuva
+    # forte cria múltiplos alertas em sequência. Spec §15 = 6h.
+    notification_rate_limit_hours: int = 6
+    # Severidade mínima para canal. Spec: WhatsApp em qualquer alerta
+    # significativo (≥3); email só para crítico (≥4) — caixa de entrada
+    # de gestor não pode virar barulho.
+    notification_min_severity_whatsapp: int = 3
+    notification_min_severity_email: int = 4
 
     # --- News feature flags ---
     # Default-enabled: Google Notícias RSS cobre G1 / EM / Folha / UOL /
@@ -119,6 +128,10 @@ class Settings(BaseSettings):
     schedule_analysis: str = "30 */6 * * *"
     schedule_alert_check: str = "0 * * * *"
     schedule_alert_expiration: str = "15 * * * *"
+    # Sweep de notificações pendentes a cada 5 min. Curto o suficiente
+    # pra alertas críticos chegarem rápido; longo o bastante pra rate-limit
+    # de 6h por (dam, alert_type) evitar tempestade.
+    schedule_notifications: str = "*/5 * * * *"
     schedule_report_briefing: str = "0 7 * * 1"
     schedule_report_client: str = "0 8 1 * *"
 

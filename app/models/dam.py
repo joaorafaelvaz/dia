@@ -56,14 +56,28 @@ class Dam(Base):
 
     client: Mapped[Client] = relationship(back_populates="dams", lazy="selectin")
 
+    # passive_deletes=True diz "confia no DDL ON DELETE CASCADE pra apagar
+    # os filhos" — sem isso, session.delete(dam) só dispara DELETE nos filhos
+    # que já estão carregados em memória, deixando órfãos os que não foram
+    # tocados nessa sessão. Em Postgres prod o CASCADE roda no banco;
+    # em SQLite teste precisa de PRAGMA foreign_keys=ON (já habilitado).
     events: Mapped[list[ClimateEvent]] = relationship(
-        back_populates="dam", cascade="all, delete-orphan", lazy="selectin"
+        back_populates="dam",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+        passive_deletes=True,
     )
     forecasts: Mapped[list[Forecast]] = relationship(
-        back_populates="dam", cascade="all, delete-orphan", lazy="selectin"
+        back_populates="dam",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+        passive_deletes=True,
     )
     alerts: Mapped[list[Alert]] = relationship(
-        back_populates="dam", cascade="all, delete-orphan", lazy="selectin"
+        back_populates="dam",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+        passive_deletes=True,
     )
 
     @property

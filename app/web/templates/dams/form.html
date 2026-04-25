@@ -49,12 +49,19 @@
       </label>
 
       <label class="block text-sm">
-        <span class="mb-1 block text-slate-400">Cliente <span class="text-rose-400">*</span></span>
+        <span class="mb-1 block text-slate-400">
+          Cliente <span class="text-rose-400">*</span>
+          {% if preselected_client_id %}
+          <span class="ml-1 text-xs text-amber-300">(pré-selecionado pelo menu Cliente)</span>
+          {% endif %}
+        </span>
         <select name="client_id" required
                 class="w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm">
           {% for c in clients %}
           <option value="{{ c.id }}"
-            {% if dam and dam.client_id == c.id %}selected{% endif %}>
+            {% if dam and dam.client_id == c.id %}selected
+            {% elif not dam and preselected_client_id == c.id %}selected
+            {% endif %}>
             {{ c.name }}
           </option>
           {% endfor %}

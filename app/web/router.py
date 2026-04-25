@@ -159,9 +159,17 @@ async def dams_list(
 
 @web_router.get("/dams/new", response_class=HTMLResponse)
 async def dams_new(
-    request: Request, session: SessionDep, _: AuthUser
+    request: Request,
+    session: SessionDep,
+    _: AuthUser,
+    client_id: int | None = None,
 ) -> HTMLResponse:
-    """Formulário de nova barragem. Carrega clients ativos pro dropdown."""
+    """Formulário de nova barragem. Carrega clients ativos pro dropdown.
+
+    `?client_id=N` pré-seleciona aquele cliente — usado pelo botão "+ Adicionar
+    barragem" dentro de /clients/{id}, pra o operador não precisar escolher
+    de novo.
+    """
     clients = list(
         (
             await session.execute(
@@ -172,7 +180,9 @@ async def dams_new(
         .all()
     )
     return templates.TemplateResponse(
-        request, "dams/form.html", {"dam": None, "clients": clients}
+        request,
+        "dams/form.html",
+        {"dam": None, "clients": clients, "preselected_client_id": client_id},
     )
 
 
@@ -214,18 +224,30 @@ async def clients_edit(
     session: SessionDep,
     _: AuthUser,
 ) -> HTMLResponse:
-    """Form de edição de cliente. Inclui dam_count pra UI mostrar/esconder
-    o botão de apagar (só permite delete se 0 dams)."""
+    """Form de edição de cliente + sub-tabela de barragens associadas.
+
+    Operador adiciona/remove dams direto daqui:
+      - "+ Adicionar barragem" → /dams/new?client_id=X (pré-seleciona)
+      - Por linha: "Desativar" (PATCH is_active=false) | "Apagar" (DELETE)
+    """
     client = await session.get(Client, client_id)
     if client is None:
         raise HTTPException(status_code=404, detail="Cliente não encontrado")
-    dam_count = (
-        await session.execute(
-            select(func.count(Dam.id)).where(Dam.client_id == client_id)
+    dams = list(
+        (
+            await session.execute(
+                select(Dam).where(Dam.client_id == client_id).order_by(Dam.name)
+            )
         )
-    ).scalar_one()
-    client.dam_count = int(dam_count or 0)
-    return templates.TemplateResponse(request, "clients/form.html", {"client": client})
+        .scalars()
+        .all()
+    )
+    client.dam_count = len(dams)
+    return templates.TemplateResponse(
+        request,
+        "clients/form.html",
+        {"client": client, "dams": dams},
+    )
 
 
 @web_router.get("/dams/{dam_id}", response_class=HTMLResponse)

@@ -72,7 +72,16 @@ def event_loop():
 
 @pytest_asyncio.fixture
 async def async_engine():
-    """Engine SQLite in-memory por teste, com schema criado."""
+    """Engine SQLite in-memory por teste, com schema criado.
+
+    PRAGMA foreign_keys=ON: SQLite não força FK por default. Sem isso,
+    `ON DELETE CASCADE` declarado no DDL é ignorado e
+    `passive_deletes=True` no relationship vira no-op — eventos/forecasts
+    /alertas ficariam órfãos quando uma dam é apagada. Postgres prod
+    força FK nativamente, SQLite teste precisa do PRAGMA.
+    """
+    from sqlalchemy import event
+
     engine = create_async_engine(
         "sqlite+aiosqlite:///:memory:",
         echo=False,
@@ -80,6 +89,13 @@ async def async_engine():
         # isso cada conexão "vê" um banco diferente.
         connect_args={"check_same_thread": False},
     )
+
+    @event.listens_for(engine.sync_engine, "connect")
+    def _enable_sqlite_fk(dbapi_conn, _connection_record):
+        cursor = dbapi_conn.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     try:

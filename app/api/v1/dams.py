@@ -102,10 +102,43 @@ async def get_dam(dam_id: int, session: SessionDep, _: AuthUser) -> Dam:
     return dam
 
 
-@router.patch("/{dam_id}", response_model=DamRead)
+@router.delete("/{dam_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_dam(
+    dam_id: int, request: Request, session: SessionDep, _: AuthUser
+) -> Response:
+    """Hard delete da barragem.
+
+    Cascade: ClimateEvent, Forecast e Alert ligados via FK com
+    `cascade='all, delete-orphan'` somem junto. Notificações já enviadas
+    (n8n) não são afetadas — só o histórico no banco.
+
+    Operador que quer parar de monitorar mas preservar histórico deve usar
+    PATCH is_active=false ao invés de DELETE. Esse endpoint existe pra
+    erros de cadastro e remoção de dados de teste.
+
+    Em request HTMX, retorna HX-Refresh:true pra a página recarregar e a
+    tabela do cliente refletir a remoção.
+    """
+    dam = await session.get(Dam, dam_id)
+    if not dam:
+        raise HTTPException(status_code=404, detail="Dam not found")
+    await session.delete(dam)
+    await session.commit()
+    log.info("dam_deleted", dam_id=dam_id, name=dam.name)
+
+    if request.headers.get("HX-Request") == "true":
+        return Response(status_code=status.HTTP_204_NO_CONTENT, headers={"HX-Refresh": "true"})
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.patch("/{dam_id}")
 async def update_dam(
-    dam_id: int, payload: DamUpdate, session: SessionDep, _: AuthUser
-) -> Dam:
+    dam_id: int,
+    payload: DamUpdate,
+    request: Request,
+    session: SessionDep,
+    _: AuthUser,
+) -> Response:
     dam = await session.get(Dam, dam_id)
     if not dam:
         raise HTTPException(status_code=404, detail="Dam not found")
@@ -121,7 +154,14 @@ async def update_dam(
         setattr(dam, key, value)
     await session.commit()
     await session.refresh(dam)
-    return dam
+
+    out = DamRead.model_validate(dam)
+    headers = (
+        {"HX-Refresh": "true"}
+        if request.headers.get("HX-Request") == "true"
+        else {}
+    )
+    return JSONResponse(content=out.model_dump(mode="json"), headers=headers)
 
 
 @router.get("/{dam_id}/events", response_model=list[ClimateEventRead])

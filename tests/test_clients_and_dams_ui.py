@@ -120,6 +120,79 @@ async def test_delete_client_with_dams_returns_409(
 
 
 @pytest.mark.asyncio
+async def test_delete_dam_hard_cascades_to_events_forecasts_alerts(
+    api_client, async_session, sample_dam
+):
+    """DELETE /api/v1/dams/{id} apaga a dam E os filhos via cascade.
+
+    Cobre regressão: se relationship cascade='all, delete-orphan' regredir,
+    operador que aciona "Apagar" pelo menu cliente vai deixar órfãos no banco.
+    """
+    from sqlalchemy import select as sql_select
+
+    from tests.conftest import make_alert, make_event, make_forecast
+
+    # Popula 1 de cada filho ligado à sample_dam
+    ev = make_event(dam_id=sample_dam.id, title="Evento histórico")
+    fc = make_forecast(dam_id=sample_dam.id, max_precipitation_mm=120.0)
+    al = make_alert(dam_id=sample_dam.id, title="Alerta antigo")
+    async_session.add_all([ev, fc, al])
+    await async_session.commit()
+
+    resp = await api_client.delete(f"/api/v1/dams/{sample_dam.id}")
+    assert resp.status_code == 204
+
+    # Tudo deve ter sumido. Confere via SELECT direto pra ignorar identity map.
+    from app.models.alert import Alert
+    from app.models.dam import Dam
+    from app.models.event import ClimateEvent
+    from app.models.forecast import Forecast
+
+    dam_ids = (await async_session.execute(sql_select(Dam.id))).scalars().all()
+    ev_ids = (await async_session.execute(sql_select(ClimateEvent.id))).scalars().all()
+    fc_ids = (await async_session.execute(sql_select(Forecast.id))).scalars().all()
+    al_ids = (await async_session.execute(sql_select(Alert.id))).scalars().all()
+    assert sample_dam.id not in dam_ids
+    assert ev.id not in ev_ids
+    assert fc.id not in fc_ids
+    assert al.id not in al_ids
+
+
+@pytest.mark.asyncio
+async def test_patch_dam_is_active_false_keeps_history(
+    api_client, async_session, sample_dam
+):
+    """Soft delete (PATCH is_active=false) preserva dam e histórico.
+
+    Regra do menu Cliente: 'Desativar' deve sair do monitoramento ativo
+    mas manter eventos/forecasts/alerts pra relatório histórico.
+    """
+    from tests.conftest import make_event
+
+    ev = make_event(dam_id=sample_dam.id, title="Histórico relevante")
+    async_session.add(ev)
+    await async_session.commit()
+
+    resp = await api_client.patch(
+        f"/api/v1/dams/{sample_dam.id}",
+        json={"is_active": False},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["is_active"] is False
+
+    # Dam continua existindo + evento preservado
+    from sqlalchemy import select as sql_select
+    from app.models.dam import Dam
+    from app.models.event import ClimateEvent
+
+    dam_ids = (await async_session.execute(sql_select(Dam.id))).scalars().all()
+    ev_ids = (await async_session.execute(sql_select(ClimateEvent.id))).scalars().all()
+    assert sample_dam.id in dam_ids
+    assert ev.id in ev_ids
+
+
+@pytest.mark.asyncio
 async def test_resolve_dam_ids_scope_now_matches_client_name(async_session):
     """Regressão do refactor: scope passa por Client.name (case-insensitive).
 

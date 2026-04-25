@@ -12,7 +12,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, Request, Response, status
+from fastapi.responses import JSONResponse
 from sqlalchemy import delete, select
 
 from app.dependencies import AuthUser, SessionDep
@@ -218,8 +219,9 @@ async def list_test_alerts(
 # Limpeza
 # ---------------------------------------------------------------------------
 
-@router.delete("/data", response_model=TestHarnessPurgeResult)
+@router.delete("/data")
 async def purge_test_data(
+    request: Request,
     session: SessionDep,
     _: AuthUser,
     older_than_days: int = Query(default=7, ge=0, le=365),
@@ -228,7 +230,7 @@ async def purge_test_data(
         description="Se true, ignora older_than_days e apaga TODOS os "
         "registros is_test=True (reset total ao estado pré-testes).",
     ),
-) -> TestHarnessPurgeResult:
+) -> Response:
     """Hard delete de Alert/Forecast com is_test=True.
 
     Modo padrão: filtra por `older_than_days` (default 7d). Modo `purge_all=true`:
@@ -268,8 +270,20 @@ async def purge_test_data(
         alerts_deleted=alerts_deleted,
         forecasts_deleted=fcs_deleted,
     )
-    return TestHarnessPurgeResult(
+
+    body = TestHarnessPurgeResult(
         older_than_days=0 if purge_all else older_than_days,
         alerts_deleted=alerts_deleted,
         forecasts_deleted=fcs_deleted,
     )
+
+    # Quando vem do menu HTMX, força refresh full da página pra a lista
+    # lateral "Últimos testes" atualizar — sem isso o operador clica e
+    # parece que nada aconteceu (a lista é renderizada server-side).
+    # Clientes API/curl recebem JSON limpo (sem header HX-Request).
+    if request.headers.get("HX-Request") == "true":
+        return JSONResponse(
+            content=body.model_dump(),
+            headers={"HX-Refresh": "true"},
+        )
+    return JSONResponse(content=body.model_dump())

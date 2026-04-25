@@ -45,7 +45,9 @@ class Settings(BaseSettings):
     # --- External climate APIs ---
     open_meteo_forecast_url: str = "https://api.open-meteo.com/v1/forecast"
     open_meteo_archive_url: str = "https://archive-api.open-meteo.com/v1/archive"
-    cemaden_base_url: str = "http://www.cemaden.gov.br"
+    # CEMADEN: deprecated — não integrado nesta release. Mantido só pra não
+    # quebrar Settings de instâncias existentes. Ver docs/research/cemaden-2026-04.md.
+    cemaden_base_url: str = "http://www2.cemaden.gov.br"
 
     # --- ANA Hidrowebservice ---
     # Substitui o INMET (apitempo saiu do ar; tempo.inmet.gov.br é gated por

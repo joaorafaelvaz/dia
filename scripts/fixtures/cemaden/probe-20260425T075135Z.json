@@ -1,0 +1,97 @@
+[
+  {
+    "label": "spec_mapainterativo_php",
+    "url": "http://www.cemaden.gov.br/mapainterativo/load/carregaMapaEmpreendimento.php",
+    "method": "GET",
+    "status": 404,
+    "final_url": "http://www2.cemaden.gov.br/mapainterativo/load/carregaMapaEmpreendimento.php",
+    "content_type": "text/html; charset=UTF-8",
+    "content_length": 42585,
+    "sample": "<!DOCTYPE html>\r\n<html lang=\"pt-BR\" prefix=\"og: http://ogp.me/ns#\">\r\n<head>\r\n<meta charset=\"UTF-8\" />\r\n<link rel=\"profile\" href=\"http://gmpg.org/xfn/11\" />\r\n<link rel=\"pingback\" href=\"http://www2.cemaden.gov.br/xmlrpc.php\" />\r\n<title>Página não encontrada &#8211; Cemaden</title>\n<link rel='dns-prefe",
+    "verdict": "http_404"
+  },
+  {
+    "label": "spec_alertas_emitidos",
+    "url": "http://www.cemaden.gov.br/alertas/alertas-emitidos/",
+    "method": "GET",
+    "status": 404,
+    "final_url": "http://www2.cemaden.gov.br/alertas/alertas-emitidos/",
+    "content_type": "text/html; charset=UTF-8",
+    "content_length": 42585,
+    "sample": "<!DOCTYPE html>\r\n<html lang=\"pt-BR\" prefix=\"og: http://ogp.me/ns#\">\r\n<head>\r\n<meta charset=\"UTF-8\" />\r\n<link rel=\"profile\" href=\"http://gmpg.org/xfn/11\" />\r\n<link rel=\"pingback\" href=\"http://www2.cemaden.gov.br/xmlrpc.php\" />\r\n<title>Página não encontrada &#8211; Cemaden</title>\n<link rel='dns-prefe",
+    "verdict": "http_404"
+  },
+  {
+    "label": "www2_mapainterativo_root",
+    "url": "http://www2.cemaden.gov.br/mapainterativo/",
+    "method": "GET",
+    "status": 200,
+    "final_url": "http://www2.cemaden.gov.br/mapainterativo/",
+    "content_type": "text/html",
+    "content_length": 35978,
+    "sample": "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\n<html xmlns=\"http://www.w3.org/1999/xhtml\">\n<head>\n        <meta http-equiv=\"refresh\" content=\"0; URL='https://mapainterativo.cemaden.gov.br/'\"/>\n\t<meta http-equiv=\"Content-Type\"",
+    "verdict": "html_page"
+  },
+  {
+    "label": "www2_carrega_empreendimento",
+    "url": "http://www2.cemaden.gov.br/mapainterativo/load/carregaMapaEmpreendimento.php",
+    "method": "GET",
+    "status": 404,
+    "final_url": "http://www2.cemaden.gov.br/mapainterativo/load/carregaMapaEmpreendimento.php",
+    "content_type": "text/html; charset=UTF-8",
+    "content_length": 42585,
+    "sample": "<!DOCTYPE html>\r\n<html lang=\"pt-BR\" prefix=\"og: http://ogp.me/ns#\">\r\n<head>\r\n<meta charset=\"UTF-8\" />\r\n<link rel=\"profile\" href=\"http://gmpg.org/xfn/11\" />\r\n<link rel=\"pingback\" href=\"http://www2.cemaden.gov.br/xmlrpc.php\" />\r\n<title>Página não encontrada &#8211; Cemaden</title>\n<link rel='dns-prefe",
+    "verdict": "http_404"
+  },
+  {
+    "label": "rss_alertas_categoria",
+    "url": "http://www.cemaden.gov.br/categoria/alertas-cemaden/feed/",
+    "method": "GET",
+    "status": 200,
+    "final_url": "http://www2.cemaden.gov.br/categoria/alertas-cemaden/feed/",
+    "content_type": "application/rss+xml; charset=UTF-8",
+    "content_length": 906,
+    "sample": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><rss version=\"2.0\"\n\txmlns:content=\"http://purl.org/rss/1.0/modules/content/\"\n\txmlns:wfw=\"http://wellformedweb.org/CommentAPI/\"\n\txmlns:dc=\"http://purl.org/dc/elements/1.1/\"\n\txmlns:atom=\"http://www.w3.org/2005/Atom\"\n\txmlns:sy=\"http://purl.org/rss/1.0/modules/syndi",
+    "verdict": "rss_or_xml"
+  },
+  {
+    "label": "rss_root_feed",
+    "url": "http://www.cemaden.gov.br/feed/",
+    "method": "GET",
+    "status": 200,
+    "final_url": "http://www2.cemaden.gov.br/feed/",
+    "content_type": "application/rss+xml; charset=UTF-8",
+    "content_length": 142206,
+    "sample": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><rss version=\"2.0\"\n\txmlns:content=\"http://purl.org/rss/1.0/modules/content/\"\n\txmlns:wfw=\"http://wellformedweb.org/CommentAPI/\"\n\txmlns:dc=\"http://purl.org/dc/elements/1.1/\"\n\txmlns:atom=\"http://www.w3.org/2005/Atom\"\n\txmlns:sy=\"http://purl.org/rss/1.0/modules/syndi",
+    "verdict": "rss_or_xml"
+  },
+  {
+    "label": "municipios_monitorados",
+    "url": "http://www.cemaden.gov.br/municipios-monitorados-2/",
+    "method": "GET",
+    "status": 200,
+    "final_url": "http://www2.cemaden.gov.br/municipios-monitorados-2/",
+    "content_type": "text/html; charset=UTF-8",
+    "content_length": 149388,
+    "sample": "<!DOCTYPE html>\r\n<html lang=\"pt-BR\" prefix=\"og: http://ogp.me/ns#\">\r\n<head>\r\n<meta charset=\"UTF-8\" />\r\n<link rel=\"profile\" href=\"http://gmpg.org/xfn/11\" />\r\n<link rel=\"pingback\" href=\"http://www2.cemaden.gov.br/xmlrpc.php\" />\r\n<title>Municípios Monitorados &#8211; Cemaden</title>\n<link rel='dns-pref",
+    "verdict": "html_page"
+  },
+  {
+    "label": "salvar_graficos_legacy",
+    "url": "http://sjc.salvar.cemaden.gov.br/resources/graficos/interativo/getJson2.php?est=311860603A",
+    "method": "GET",
+    "verdict": "http_error:ConnectError",
+    "error": "[Errno 11001] getaddrinfo failed"
+  },
+  {
+    "label": "https_root",
+    "url": "https://www.cemaden.gov.br/",
+    "method": "GET",
+    "status": 200,
+    "final_url": "https://www.gov.br/cemaden/pt-br",
+    "content_type": "text/html;charset=utf-8",
+    "content_length": 222269,
+    "sample": "<!DOCTYPE html>\n<html xmlns=\"http://www.w3.org/1999/xhtml\" lang=\"pt-br\" xml:lang=\"pt-br\">\n\n<head>\n    <meta charset=\"utf-8\" />\n  <!-- Google Tag Manager -->\n  <script type=\"text\">(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':\n  new Date().getTime(),event:'gtm.js'});var f=d.getElementsByT",
+    "verdict": "html_page"
+  }
+]

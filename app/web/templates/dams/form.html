@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+{% block title %}{{ "Editar" if dam else "Nova" }} barragem · DIA{% endblock %}
+{% block content %}
+<div class="mb-6 flex items-center justify-between">
+  <div>
+    <h1 class="text-2xl font-semibold">
+      {% if dam %}Editar barragem{% else %}Nova barragem{% endif %}
+    </h1>
+    <p class="text-sm text-slate-400">
+      {% if dam %}
+        Atualizar dados. Para mudar o cliente, escolha outro no dropdown.
+      {% else %}
+        Após criar, a coleta climática (Open-Meteo, ANA, news) começa automaticamente —
+        forecasts aparecem no dashboard em ~30s.
+      {% endif %}
+    </p>
+  </div>
+  <a href="/dams" class="text-sm text-slate-400 hover:text-slate-200">← Voltar</a>
+</div>
+
+{% if not clients %}
+<div class="mb-4 rounded border border-amber-700 bg-amber-900/30 p-4 text-sm text-amber-100">
+  Nenhum cliente cadastrado. <a href="/clients/new" class="font-medium underline">Crie um cliente primeiro</a>
+  pra associar a barragem.
+</div>
+{% else %}
+
+<div class="max-w-3xl rounded border border-slate-800 bg-slate-900 p-6">
+  <form
+    {% if dam %}
+      hx-patch="/api/v1/dams/{{ dam.id }}"
+    {% else %}
+      hx-post="/api/v1/dams"
+    {% endif %}
+    hx-ext="json-enc"
+    hx-target="#form-result"
+    hx-swap="innerHTML"
+    class="space-y-4"
+  >
+    <div class="grid gap-4 sm:grid-cols-2">
+      <label class="block text-sm sm:col-span-2">
+        <span class="mb-1 block text-slate-400">Nome da barragem <span class="text-rose-400">*</span></span>
+        <input
+          type="text" name="name" required maxlength="200"
+          value="{{ dam.name if dam else '' }}"
+          class="w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm"
+          placeholder="Ex: Barragem dos Alemães"
+        />
+      </label>
+
+      <label class="block text-sm">
+        <span class="mb-1 block text-slate-400">Cliente <span class="text-rose-400">*</span></span>
+        <select name="client_id" required
+                class="w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm">
+          {% for c in clients %}
+          <option value="{{ c.id }}"
+            {% if dam and dam.client_id == c.id %}selected{% endif %}>
+            {{ c.name }}
+          </option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <label class="block text-sm">
+        <span class="mb-1 block text-slate-400">Tipo <span class="text-rose-400">*</span></span>
+        <select name="dam_type" required
+                class="w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm">
+          {% set t = dam.dam_type if dam else "tailings" %}
+          <option value="tailings" {% if t == "tailings" %}selected{% endif %}>Rejeitos (tailings)</option>
+          <option value="flood_control" {% if t == "flood_control" %}selected{% endif %}>Controle de cheias</option>
+          <option value="hydropower" {% if t == "hydropower" %}selected{% endif %}>Hidrelétrica</option>
+          <option value="sediment" {% if t == "sediment" %}selected{% endif %}>Sedimento</option>
+        </select>
+      </label>
+
+      <label class="block text-sm">
+        <span class="mb-1 block text-slate-400">Município <span class="text-rose-400">*</span></span>
+        <input
+          type="text" name="municipality" required maxlength="150"
+          value="{{ dam.municipality if dam else '' }}"
+          class="w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm"
+        />
+      </label>
+
+      <label class="block text-sm">
+        <span class="mb-1 block text-slate-400">UF <span class="text-rose-400">*</span></span>
+        <input
+          type="text" name="state" required maxlength="3" minlength="2"
+          value="{{ dam.state if dam else 'MG' }}"
+          class="w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm uppercase"
+          placeholder="MG"
+        />
+      </label>
+
+      <label class="block text-sm">
+        <span class="mb-1 block text-slate-400">Latitude <span class="text-rose-400">*</span></span>
+        <input
+          type="number" step="0.000001" name="latitude" required min="-90" max="90"
+          value="{{ dam.latitude if dam else '' }}"
+          class="w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm font-mono"
+          placeholder="-20.385500"
+        />
+      </label>
+
+      <label class="block text-sm">
+        <span class="mb-1 block text-slate-400">Longitude <span class="text-rose-400">*</span></span>
+        <input
+          type="number" step="0.000001" name="longitude" required min="-180" max="180"
+          value="{{ dam.longitude if dam else '' }}"
+          class="w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm font-mono"
+          placeholder="-43.503600"
+        />
+      </label>
+    </div>
+
+    <fieldset class="rounded border border-slate-800 bg-slate-950/40 p-4">
+      <legend class="px-2 text-xs uppercase tracking-wider text-slate-400">Classificação ANM (opcional)</legend>
+      <div class="grid gap-4 sm:grid-cols-3">
+        <label class="block text-sm">
+          <span class="mb-1 block text-slate-400">Categoria ANM</span>
+          <select name="anm_classification"
+                  class="w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm">
+            {% set a = dam.anm_classification if dam else "" %}
+            <option value="" {% if not a %}selected{% endif %}>—</option>
+            <option value="A" {% if a == "A" %}selected{% endif %}>A</option>
+            <option value="B" {% if a == "B" %}selected{% endif %}>B</option>
+            <option value="C" {% if a == "C" %}selected{% endif %}>C</option>
+          </select>
+        </label>
+        <label class="block text-sm">
+          <span class="mb-1 block text-slate-400">CRI (Classe de Risco Integrada)</span>
+          <select name="cri"
+                  class="w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm">
+            {% set cri_v = dam.cri if dam else "" %}
+            <option value="" {% if not cri_v %}selected{% endif %}>—</option>
+            <option value="Baixa" {% if cri_v == "Baixa" %}selected{% endif %}>Baixa</option>
+            <option value="Média" {% if cri_v == "Média" %}selected{% endif %}>Média</option>
+            <option value="Alta" {% if cri_v == "Alta" %}selected{% endif %}>Alta</option>
+          </select>
+        </label>
+        <label class="block text-sm">
+          <span class="mb-1 block text-slate-400">DPA (Dano Potencial)</span>
+          <select name="dpa"
+                  class="w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm">
+            {% set dpa_v = dam.dpa if dam else "" %}
+            <option value="" {% if not dpa_v %}selected{% endif %}>—</option>
+            <option value="Baixo" {% if dpa_v == "Baixo" %}selected{% endif %}>Baixo</option>
+            <option value="Médio" {% if dpa_v == "Médio" %}selected{% endif %}>Médio</option>
+            <option value="Alto" {% if dpa_v == "Alto" %}selected{% endif %}>Alto</option>
+          </select>
+        </label>
+      </div>
+    </fieldset>
+
+    <div class="grid gap-4 sm:grid-cols-2">
+      <label class="block text-sm">
+        <span class="mb-1 block text-slate-400">Capacidade (m³)</span>
+        <input
+          type="number" name="capacity_m3" min="0" step="1000"
+          value="{{ dam.capacity_m3 if dam and dam.capacity_m3 is not none else '' }}"
+          class="w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm"
+        />
+      </label>
+      <label class="block text-sm">
+        <span class="mb-1 block text-slate-400">Status operacional</span>
+        <select name="status"
+                class="w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm">
+          {% set s = dam.status if dam else "active" %}
+          <option value="active" {% if s == "active" %}selected{% endif %}>Ativa</option>
+          <option value="decharacterizing" {% if s == "decharacterizing" %}selected{% endif %}>Em descaracterização</option>
+          <option value="inactive" {% if s == "inactive" %}selected{% endif %}>Inativa</option>
+        </select>
+      </label>
+    </div>
+
+    <label class="block text-sm">
+      <span class="mb-1 block text-slate-400">Notas internas</span>
+      <textarea
+        name="notes" rows="3"
+        class="w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm"
+      >{{ dam.notes or '' if dam else '' }}</textarea>
+    </label>
+
+    <label class="flex items-center gap-2 text-sm text-slate-300">
+      <input type="checkbox" name="is_active" value="true"
+        {% if not dam or dam.is_active %}checked{% endif %}
+        class="accent-brand" />
+      <span>Inclusa no monitoramento (cron de coleta)</span>
+    </label>
+
+    <div class="flex items-center gap-3 pt-2">
+      <button class="rounded bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark">
+        {% if dam %}Salvar alterações{% else %}Criar barragem e iniciar coleta{% endif %}
+      </button>
+    </div>
+  </form>
+
+  <div id="form-result" class="mt-4"></div>
+</div>
+{% endif %}
+{% endblock %}

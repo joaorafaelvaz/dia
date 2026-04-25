@@ -13,7 +13,7 @@ from datetime import date, timedelta
 
 import pytest
 
-from tests.conftest import make_alert, make_dam, make_event
+from tests.conftest import make_alert, make_client, make_dam, make_event
 
 
 @pytest.mark.asyncio
@@ -37,19 +37,32 @@ async def test_bad_credentials_returns_401(anon_api_client):
 
 
 @pytest.mark.asyncio
-async def test_list_dams_filters_by_owner_group(api_client, async_session):
-    """`?owner_group=Gerdau` retorna só barragens dessa empresa."""
-    gerdau_dam = make_dam(name="Alemães", owner_group="Gerdau")
-    kinross_dam = make_dam(name="Santo Antônio", owner_group="Kinross")
+async def test_list_dams_filters_by_client_id(api_client, async_session):
+    """`?client_id=N` retorna só barragens daquele cliente.
+
+    Migration 0004 trocou o filtro string `owner_group` por FK `client_id`.
+    Cobre regressão de quem ainda passa o param antigo: agora deve usar
+    /api/v1/clients pra resolver o id e filtrar dams.
+    """
+    gerdau = make_client(name="Gerdau")
+    kinross = make_client(name="Kinross")
+    async_session.add_all([gerdau, kinross])
+    await async_session.commit()
+    await async_session.refresh(gerdau)
+    await async_session.refresh(kinross)
+
+    gerdau_dam = make_dam(name="Alemães", client_id=gerdau.id)
+    kinross_dam = make_dam(name="Santo Antônio", client_id=kinross.id)
     async_session.add_all([gerdau_dam, kinross_dam])
     await async_session.commit()
 
-    resp = await api_client.get("/api/v1/dams", params={"owner_group": "Gerdau"})
+    resp = await api_client.get("/api/v1/dams", params={"client_id": gerdau.id})
     assert resp.status_code == 200
     payload = resp.json()
     assert len(payload) == 1
     assert payload[0]["name"] == "Alemães"
-    assert payload[0]["owner_group"] == "Gerdau"
+    assert payload[0]["client_id"] == gerdau.id
+    assert payload[0]["client_name"] == "Gerdau"
 
 
 @pytest.mark.asyncio

@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Clientes · DIA{% endblock %}
+{% block content %}
+<div class="mb-6 flex items-center justify-between">
+  <div>
+    <h1 class="text-2xl font-semibold">Clientes</h1>
+    <p class="text-sm text-slate-400">
+      Empresas proprietárias monitoradas. Cada cliente pode ter uma ou mais barragens.
+    </p>
+  </div>
+  <a href="/clients/new"
+     class="rounded bg-brand px-3 py-1.5 text-sm font-medium hover:bg-brand-dark">
+    + Novo cliente
+  </a>
+</div>
+
+{% if clients %}
+<div class="overflow-hidden rounded border border-slate-800 bg-slate-900">
+  <table class="min-w-full divide-y divide-slate-800 text-sm">
+    <thead class="bg-slate-950/40 text-xs uppercase tracking-wider text-slate-400">
+      <tr>
+        <th class="px-4 py-2 text-left">Nome</th>
+        <th class="px-4 py-2 text-left">Contato</th>
+        <th class="px-4 py-2 text-left">Telefone</th>
+        <th class="px-4 py-2 text-left">CNPJ</th>
+        <th class="px-4 py-2 text-right">Barragens</th>
+        <th class="px-4 py-2 text-center">Ativo</th>
+        <th class="px-4 py-2"></th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-800">
+      {% for c in clients %}
+      <tr class="hover:bg-slate-800/40">
+        <td class="px-4 py-2 font-medium text-slate-100">{{ c.name }}</td>
+        <td class="px-4 py-2 text-slate-300">
+          {{ c.contact_name or "—" }}
+          {% if c.contact_email %}<div class="text-xs text-slate-500">{{ c.contact_email }}</div>{% endif %}
+        </td>
+        <td class="px-4 py-2 text-slate-300">{{ c.contact_phone or "—" }}</td>
+        <td class="px-4 py-2 text-slate-300 font-mono text-xs">{{ c.cnpj or "—" }}</td>
+        <td class="px-4 py-2 text-right tabular-nums">{{ c.dam_count or 0 }}</td>
+        <td class="px-4 py-2 text-center">
+          {% if c.is_active %}
+            <span class="rounded bg-emerald-900/60 px-2 py-0.5 text-xs text-emerald-200">sim</span>
+          {% else %}
+            <span class="rounded bg-slate-700 px-2 py-0.5 text-xs text-slate-300">não</span>
+          {% endif %}
+        </td>
+        <td class="px-4 py-2 text-right">
+          <a href="/clients/{{ c.id }}"
+             class="text-xs text-brand hover:underline">editar →</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="rounded border border-slate-800 bg-slate-900 p-8 text-center">
+  <p class="text-slate-400">Nenhum cliente cadastrado ainda.</p>
+  <a href="/clients/new"
+     class="mt-3 inline-block rounded bg-brand px-3 py-1.5 text-sm font-medium hover:bg-brand-dark">
+    Criar primeiro cliente
+  </a>
+</div>
+{% endif %}
+{% endblock %}

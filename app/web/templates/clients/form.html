@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}{{ "Editar" if client else "Novo" }} cliente · DIA{% endblock %}
+{% block content %}
+<div class="mb-6 flex items-center justify-between">
+  <div>
+    <h1 class="text-2xl font-semibold">
+      {% if client %}Editar cliente{% else %}Novo cliente{% endif %}
+    </h1>
+    <p class="text-sm text-slate-400">
+      {% if client %}
+        Atualizar contatos do cliente. As barragens associadas continuam intocadas.
+      {% else %}
+        Empresa proprietária. Depois de criar, você pode adicionar barragens em /dams.
+      {% endif %}
+    </p>
+  </div>
+  <a href="/clients" class="text-sm text-slate-400 hover:text-slate-200">← Voltar</a>
+</div>
+
+<div class="max-w-2xl rounded border border-slate-800 bg-slate-900 p-6">
+  <form
+    {% if client %}
+      hx-patch="/api/v1/clients/{{ client.id }}"
+    {% else %}
+      hx-post="/api/v1/clients"
+    {% endif %}
+    hx-ext="json-enc"
+    hx-target="#form-result"
+    hx-swap="innerHTML"
+    class="space-y-4"
+  >
+    <label class="block text-sm">
+      <span class="mb-1 block text-slate-400">Nome <span class="text-rose-400">*</span></span>
+      <input
+        type="text" name="name" required maxlength="150"
+        value="{{ client.name if client else '' }}"
+        class="w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm"
+      />
+    </label>
+
+    <div class="grid gap-4 sm:grid-cols-2">
+      <label class="block text-sm">
+        <span class="mb-1 block text-slate-400">Pessoa de contato</span>
+        <input
+          type="text" name="contact_name" maxlength="150"
+          value="{{ client.contact_name or '' if client else '' }}"
+          class="w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm"
+        />
+      </label>
+      <label class="block text-sm">
+        <span class="mb-1 block text-slate-400">Email</span>
+        <input
+          type="email" name="contact_email" maxlength="200"
+          value="{{ client.contact_email or '' if client else '' }}"
+          class="w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm"
+        />
+      </label>
+      <label class="block text-sm">
+        <span class="mb-1 block text-slate-400">Telefone</span>
+        <input
+          type="tel" name="contact_phone" maxlength="50"
+          value="{{ client.contact_phone or '' if client else '' }}"
+          class="w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm"
+        />
+      </label>
+      <label class="block text-sm">
+        <span class="mb-1 block text-slate-400">CNPJ</span>
+        <input
+          type="text" name="cnpj" maxlength="20"
+          value="{{ client.cnpj or '' if client else '' }}"
+          class="w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm font-mono"
+          placeholder="00.000.000/0001-00"
+        />
+      </label>
+    </div>
+
+    <label class="block text-sm">
+      <span class="mb-1 block text-slate-400">Notas internas</span>
+      <textarea
+        name="notes" rows="3"
+        class="w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm"
+      >{{ client.notes or '' if client else '' }}</textarea>
+    </label>
+
+    <label class="flex items-center gap-2 text-sm text-slate-300">
+      <input type="checkbox" name="is_active" value="true"
+        {% if not client or client.is_active %}checked{% endif %}
+        class="accent-brand" />
+      <span>Cliente ativo (afeta listas e relatórios automáticos)</span>
+    </label>
+
+    <div class="flex items-center gap-3 pt-2">
+      <button class="rounded bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark">
+        {% if client %}Salvar alterações{% else %}Criar cliente{% endif %}
+      </button>
+      {% if client and (client.dam_count or 0) == 0 %}
+      <button
+        type="button"
+        class="rounded border border-rose-700 bg-rose-900/40 px-3 py-1.5 text-sm text-rose-100 hover:bg-rose-900/60"
+        hx-delete="/api/v1/clients/{{ client.id }}"
+        hx-confirm="Apagar cliente '{{ client.name }}'? Só funciona se não houver barragens associadas."
+        hx-target="#form-result"
+      >Apagar</button>
+      {% endif %}
+    </div>
+  </form>
+
+  <div id="form-result" class="mt-4"></div>
+</div>
+{% endblock %}

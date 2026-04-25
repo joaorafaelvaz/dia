@@ -4,13 +4,14 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, Float, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 
 if TYPE_CHECKING:
     from app.models.alert import Alert
+    from app.models.client import Client
     from app.models.event import ClimateEvent
     from app.models.forecast import Forecast
 
@@ -20,7 +21,9 @@ class Dam(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
-    owner_group: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    client_id: Mapped[int] = mapped_column(
+        ForeignKey("clients.id"), nullable=False, index=True
+    )
     dam_type: Mapped[str] = mapped_column(String(50), nullable=False)
     # "tailings" | "flood_control" | "hydropower" | "sediment" | other
 
@@ -51,6 +54,8 @@ class Dam(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
 
+    client: Mapped[Client] = relationship(back_populates="dams", lazy="selectin")
+
     events: Mapped[list[ClimateEvent]] = relationship(
         back_populates="dam", cascade="all, delete-orphan", lazy="selectin"
     )
@@ -61,5 +66,21 @@ class Dam(Base):
         back_populates="dam", cascade="all, delete-orphan", lazy="selectin"
     )
 
+    @property
+    def owner_group(self) -> str:
+        """Compat: locais de leitura ainda usam dam.owner_group como string.
+
+        Antes era coluna; depois da migration 0004 vira proxy pra
+        client.name. Quem precisa filtrar/ordenar SQL deve usar
+        Client.name diretamente via JOIN.
+        """
+        return self.client.name if self.client else ""
+
+    @property
+    def client_name(self) -> str | None:
+        """Helper pra schemas Pydantic (`DamRead.client_name`) lerem via
+        from_attributes sem precisar JOIN explícito."""
+        return self.client.name if self.client else None
+
     def __repr__(self) -> str:
-        return f"<Dam id={self.id} name={self.name!r} group={self.owner_group}>"
+        return f"<Dam id={self.id} name={self.name!r} client_id={self.client_id}>"

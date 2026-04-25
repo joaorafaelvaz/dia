@@ -43,6 +43,7 @@ from sqlalchemy.ext.asyncio import (
 from app.config import settings
 from app.database import Base, get_session
 from app.models.alert import Alert
+from app.models.client import Client
 from app.models.dam import Dam
 from app.models.event import ClimateEvent
 from app.models.forecast import Forecast
@@ -109,10 +110,17 @@ async def async_session(async_engine) -> AsyncIterator[AsyncSession]:
 # fica óbvia no teste.
 
 
+def make_client(*, name: str = "Gerdau", **overrides) -> Client:
+    """Factory pra Client. Requerido como pai de Dam após migration 0004."""
+    kwargs = dict(name=name, is_active=True)
+    kwargs.update(overrides)
+    return Client(**kwargs)
+
+
 def make_dam(
     *,
     name: str = "Barragem Teste",
-    owner_group: str = "Gerdau",
+    client_id: int | None = None,
     dam_type: str = "tailings",
     municipality: str = "Ouro Preto",
     state: str = "MG",
@@ -125,9 +133,11 @@ def make_dam(
     is_active: bool = True,
     **overrides,
 ) -> Dam:
+    """Factory pra Dam. `client_id` é obrigatório — quem usa make_dam tem que
+    persistir um Client antes ou usar a fixture `sample_dam`."""
     kwargs = dict(
         name=name,
-        owner_group=owner_group,
+        client_id=client_id,
         dam_type=dam_type,
         municipality=municipality,
         state=state,
@@ -235,9 +245,19 @@ def make_alert(
 
 
 @pytest_asyncio.fixture
-async def sample_dam(async_session) -> Dam:
+async def sample_client(async_session) -> Client:
+    """Cliente default — Gerdau, pra testes que precisam só de FK válido."""
+    client = make_client()
+    async_session.add(client)
+    await async_session.commit()
+    await async_session.refresh(client)
+    return client
+
+
+@pytest_asyncio.fixture
+async def sample_dam(async_session, sample_client) -> Dam:
     """Barragem default pra testes que precisam de um FK válido."""
-    dam = make_dam()
+    dam = make_dam(client_id=sample_client.id)
     async_session.add(dam)
     await async_session.commit()
     await async_session.refresh(dam)

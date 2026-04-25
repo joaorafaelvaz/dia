@@ -1,6 +1,10 @@
 """Seed initial 15 dams (Gerdau + Kinross) into the DIA database.
 
-Idempotent: uses (owner_group, name) as the natural key. Re-running updates fields.
+Idempotent em duas dimensões:
+  - Cada owner_group distinto vira uma linha em `clients` (UPSERT por nome)
+  - Cada (client, dam.name) é a chave natural pra UPSERT da Dam
+
+Re-rodar atualiza campos sem duplicar.
 
 Run:
     docker compose exec api python -m scripts.seed_dams
@@ -14,6 +18,7 @@ import asyncio
 from sqlalchemy import select
 
 from app.database import SessionLocal
+from app.models.client import Client
 from app.models.dam import Dam
 from app.utils.logging import configure_logging, get_logger
 
@@ -231,26 +236,61 @@ DAMS: list[dict] = [
 ]
 
 
+async def _upsert_clients(session, names: set[str]) -> dict[str, int]:
+    """Garante uma linha em clients pra cada nome, retorna {name: id}."""
+    name_to_id: dict[str, int] = {}
+    for name in sorted(names):
+        existing = (
+            await session.execute(select(Client).where(Client.name == name))
+        ).scalar_one_or_none()
+        if existing:
+            name_to_id[name] = existing.id
+            continue
+        client = Client(name=name, is_active=True)
+        session.add(client)
+        await session.flush()  # popula client.id
+        name_to_id[name] = client.id
+    return name_to_id
+
+
 async def seed() -> None:
     async with SessionLocal() as session:
+        # Passo 1: clients (Gerdau, Kinross e demais owner_groups distintos).
+        owner_names = {payload["owner_group"] for payload in DAMS}
+        client_ids = await _upsert_clients(session, owner_names)
+
+        # Passo 2: dams. Substituímos owner_group por client_id no payload.
         created = 0
         updated = 0
         for payload in DAMS:
+            client_id = client_ids[payload["owner_group"]]
+            dam_payload = {k: v for k, v in payload.items() if k != "owner_group"}
+            dam_payload["client_id"] = client_id
+
             stmt = select(Dam).where(
-                Dam.owner_group == payload["owner_group"],
+                Dam.client_id == client_id,
                 Dam.name == payload["name"],
             )
             existing = (await session.execute(stmt)).scalar_one_or_none()
             if existing:
-                for key, value in payload.items():
+                for key, value in dam_payload.items():
                     setattr(existing, key, value)
                 updated += 1
             else:
-                session.add(Dam(**payload, is_active=True))
+                session.add(Dam(**dam_payload, is_active=True))
                 created += 1
         await session.commit()
-        log.info("seed_complete", created=created, updated=updated, total=len(DAMS))
-        print(f"Seed done — created={created} updated={updated} total={len(DAMS)}")
+        log.info(
+            "seed_complete",
+            created=created,
+            updated=updated,
+            total=len(DAMS),
+            clients=len(client_ids),
+        )
+        print(
+            f"Seed done — clients={len(client_ids)} "
+            f"dams created={created} updated={updated} total={len(DAMS)}"
+        )
 
 
 if __name__ == "__main__":

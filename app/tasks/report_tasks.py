@@ -263,15 +263,22 @@ def generate_weekly_briefing() -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 async def _owner_groups() -> list[str]:
+    """Retorna nomes de Client distintos com pelo menos uma Dam ativa.
+
+    Pós-migration 0004: a fonte é Client.name via JOIN. O nome da função fica
+    como `_owner_groups` por compat — corresponde ao conceito comercial.
+    """
+    from app.models.client import Client  # local pra evitar ciclo de import
     async with task_session() as session:
         stmt = (
-            select(Dam.owner_group)
+            select(Client.name)
+            .join(Dam, Dam.client_id == Client.id)
             .where(Dam.is_active.is_(True))
-            .group_by(Dam.owner_group)
-            .order_by(Dam.owner_group)
+            .group_by(Client.name)
+            .order_by(Client.name)
         )
         rows = (await session.execute(stmt)).scalars().all()
-        # Normaliza — "Outro"/"Other" não vai pra cliente.
+        # Normaliza — "Outro"/"Other" não vira relatório-cliente.
         return [g for g in rows if g.lower() not in {"outro", "other", ""}]
 
 

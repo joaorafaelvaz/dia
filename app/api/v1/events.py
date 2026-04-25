@@ -7,6 +7,7 @@ from fastapi import APIRouter, Query
 from sqlalchemy import select
 
 from app.dependencies import AuthUser, SessionDep
+from app.models.client import Client
 from app.models.dam import Dam
 from app.models.event import ClimateEvent
 from app.schemas.event import ClimateEventRead
@@ -31,8 +32,11 @@ async def list_events(
     if source_type:
         stmt = stmt.where(ClimateEvent.source_type == source_type)
     if owner_group:
-        stmt = stmt.join(Dam, Dam.id == ClimateEvent.dam_id).where(
-            Dam.owner_group == owner_group
+        # Filtro retro-compat: param 'owner_group' agora bate em Client.name.
+        stmt = (
+            stmt.join(Dam, Dam.id == ClimateEvent.dam_id)
+            .join(Client, Client.id == Dam.client_id)
+            .where(Client.name == owner_group)
         )
     stmt = stmt.order_by(ClimateEvent.event_date.desc()).limit(limit)
     return list((await session.execute(stmt)).scalars().all())

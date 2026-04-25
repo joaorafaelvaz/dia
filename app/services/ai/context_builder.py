@@ -33,6 +33,7 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.alert import Alert
+from app.models.client import Client
 from app.models.dam import Dam
 from app.models.event import ClimateEvent
 from app.models.forecast import Forecast
@@ -57,7 +58,8 @@ async def resolve_dam_ids(
     Regras:
     - `scope="custom"` exige `dam_ids` não-vazio; se vier vazio, lança ValueError.
     - `scope="all"`   → todas as barragens com `is_active=True`.
-    - `scope="gerdau"` / `"kinross"` → filtro por `owner_group` case-insensitive.
+    - `scope="gerdau"` / `"kinross"` / qualquer outro → match em `Client.name`
+      case-insensitive. Antes da migration 0004 era match direto em `owner_group`.
     """
     if scope == "custom":
         if not dam_ids:
@@ -66,7 +68,11 @@ async def resolve_dam_ids(
 
     stmt = select(Dam.id).where(Dam.is_active.is_(True))
     if scope != "all":
-        stmt = stmt.where(Dam.owner_group.ilike(scope))
+        # scope passa a ser o nome do client (case-insensitive). Antes era
+        # match direto na string owner_group; agora vira JOIN em Client.
+        stmt = stmt.join(Client, Dam.client_id == Client.id).where(
+            Client.name.ilike(scope)
+        )
 
     rows = (await session.execute(stmt)).scalars().all()
     return list(rows)

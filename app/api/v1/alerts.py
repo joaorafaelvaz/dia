@@ -8,6 +8,7 @@ from sqlalchemy import select
 
 from app.dependencies import AuthUser, SessionDep
 from app.models.alert import Alert
+from app.models.client import Client
 from app.models.dam import Dam
 from app.schemas.alert import AlertAcknowledge, AlertRead
 
@@ -27,7 +28,13 @@ async def list_alerts(
     if severity_min is not None:
         stmt = stmt.where(Alert.severity >= severity_min)
     if owner_group:
-        stmt = stmt.join(Dam, Dam.id == Alert.dam_id).where(Dam.owner_group == owner_group)
+        # Filtro retro-compatível: o param ainda se chama owner_group mas
+        # agora é match em Client.name via JOIN.
+        stmt = (
+            stmt.join(Dam, Dam.id == Alert.dam_id)
+            .join(Client, Client.id == Dam.client_id)
+            .where(Client.name == owner_group)
+        )
     stmt = stmt.order_by(Alert.severity.desc(), Alert.created_at.desc()).limit(limit)
     return list((await session.execute(stmt)).scalars().all())
 

@@ -16,6 +16,7 @@ from sqlalchemy import func, select
 from app.dependencies import AuthUser, SessionDep
 from app.models.ai_usage import AIUsage
 from app.models.alert import Alert
+from app.models.client import Client
 from app.models.dam import Dam
 from app.models.event import ClimateEvent
 from app.models.forecast import Forecast
@@ -140,12 +141,91 @@ async def dashboard(
 async def dams_list(
     request: Request, session: SessionDep, _: AuthUser
 ) -> HTMLResponse:
+    # JOIN client pra ordenar por nome do cliente; eager-load via selectin
+    # já cobre a property dam.owner_group nas linhas do template.
     dams = list(
-        (await session.execute(select(Dam).order_by(Dam.owner_group, Dam.name)))
+        (
+            await session.execute(
+                select(Dam).join(Client, Dam.client_id == Client.id).order_by(
+                    Client.name, Dam.name
+                )
+            )
+        )
         .scalars()
         .all()
     )
     return templates.TemplateResponse(request, "dams/list.html", {"dams": dams})
+
+
+@web_router.get("/dams/new", response_class=HTMLResponse)
+async def dams_new(
+    request: Request, session: SessionDep, _: AuthUser
+) -> HTMLResponse:
+    """Formulário de nova barragem. Carrega clients ativos pro dropdown."""
+    clients = list(
+        (
+            await session.execute(
+                select(Client).where(Client.is_active.is_(True)).order_by(Client.name)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return templates.TemplateResponse(
+        request, "dams/form.html", {"dam": None, "clients": clients}
+    )
+
+
+# ---------------------------------------------------------------------------
+# Clients
+# ---------------------------------------------------------------------------
+
+@web_router.get("/clients", response_class=HTMLResponse)
+async def clients_list(
+    request: Request, session: SessionDep, _: AuthUser
+) -> HTMLResponse:
+    """Tabela de clientes + count de barragens via outerjoin."""
+    stmt = (
+        select(Client, func.count(Dam.id).label("dam_count"))
+        .outerjoin(Dam, Dam.client_id == Client.id)
+        .group_by(Client.id)
+        .order_by(Client.name)
+    )
+    rows = (await session.execute(stmt)).all()
+    clients = []
+    for client, dam_count in rows:
+        # Espelha o que ClientRead exporia, mas como objeto simples pro template
+        client.dam_count = int(dam_count or 0)
+        clients.append(client)
+    return templates.TemplateResponse(request, "clients/list.html", {"clients": clients})
+
+
+@web_router.get("/clients/new", response_class=HTMLResponse)
+async def clients_new(
+    request: Request, _: AuthUser
+) -> HTMLResponse:
+    return templates.TemplateResponse(request, "clients/form.html", {"client": None})
+
+
+@web_router.get("/clients/{client_id}", response_class=HTMLResponse)
+async def clients_edit(
+    client_id: int,
+    request: Request,
+    session: SessionDep,
+    _: AuthUser,
+) -> HTMLResponse:
+    """Form de edição de cliente. Inclui dam_count pra UI mostrar/esconder
+    o botão de apagar (só permite delete se 0 dams)."""
+    client = await session.get(Client, client_id)
+    if client is None:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    dam_count = (
+        await session.execute(
+            select(func.count(Dam.id)).where(Dam.client_id == client_id)
+        )
+    ).scalar_one()
+    client.dam_count = int(dam_count or 0)
+    return templates.TemplateResponse(request, "clients/form.html", {"client": client})
 
 
 @web_router.get("/dams/{dam_id}", response_class=HTMLResponse)

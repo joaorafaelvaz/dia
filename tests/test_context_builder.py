@@ -16,7 +16,7 @@ import pytest
 
 from app.services.ai import context_builder, report_generator
 
-from tests.conftest import make_dam, make_event
+from tests.conftest import make_client, make_dam, make_event
 
 
 @pytest.mark.asyncio
@@ -54,16 +54,23 @@ async def test_build_context_filters_low_severity_events(async_session, sample_d
 
 
 @pytest.mark.asyncio
-async def test_resolve_dam_ids_filters_by_owner_group(async_session):
-    """`scope="gerdau"` retorna só dams com owner_group ilike 'gerdau'.
+async def test_resolve_dam_ids_filters_by_client_name(async_session):
+    """`scope="gerdau"` retorna só dams cujo Client.name ilike 'gerdau'.
 
-    Note: `resolve_dam_ids` exige `is_active=True` — dams inativas não
-    entram em escopo nominal (regra explícita do builder).
+    Pós-migration 0004 o filtro vira JOIN em Client.name (case-insensitive
+    via ilike). `resolve_dam_ids` ainda exige `is_active=True` em Dam.
     """
-    g1 = make_dam(name="G1", owner_group="Gerdau", is_active=True)
-    g2 = make_dam(name="G2", owner_group="gerdau", is_active=True)  # case-insensitive
-    k1 = make_dam(name="K1", owner_group="Kinross", is_active=True)
-    inactive = make_dam(name="GX", owner_group="Gerdau", is_active=False)
+    gerdau = make_client(name="Gerdau")
+    kinross = make_client(name="Kinross")
+    async_session.add_all([gerdau, kinross])
+    await async_session.commit()
+    await async_session.refresh(gerdau)
+    await async_session.refresh(kinross)
+
+    g1 = make_dam(name="G1", client_id=gerdau.id, is_active=True)
+    g2 = make_dam(name="G2", client_id=gerdau.id, is_active=True)
+    k1 = make_dam(name="K1", client_id=kinross.id, is_active=True)
+    inactive = make_dam(name="GX", client_id=gerdau.id, is_active=False)
     async_session.add_all([g1, g2, k1, inactive])
     await async_session.commit()
 

@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class DamBase(BaseModel):
     name: str = Field(min_length=1, max_length=200)
-    owner_group: str = Field(min_length=1, max_length=100)
+    client_id: int
     dam_type: str = Field(min_length=1, max_length=50)
     municipality: str = Field(min_length=1, max_length=150)
     state: str = Field(min_length=2, max_length=3)
@@ -27,7 +27,7 @@ class DamCreate(DamBase):
 
 class DamUpdate(BaseModel):
     name: str | None = None
-    owner_group: str | None = None
+    client_id: int | None = None
     dam_type: str | None = None
     municipality: str | None = None
     state: str | None = None
@@ -49,3 +49,6 @@ class DamRead(DamBase):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+    # Convenience: nome do client expandido pra UI/clients consumirem sem
+    # JOIN extra. Populado pelo router via Dam.client (selectin eager load).
+    client_name: str | None = None

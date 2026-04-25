@@ -51,27 +51,21 @@
         "assignments": {
           "assignments": [
             {
-              "id": "phone-1",
-              "name": "to",
+              "id": "waha-1",
+              "name": "chatId",
               "value": "={{$env.DIA_WHATSAPP_TO}}",
               "type": "string"
             },
             {
-              "id": "msg-1",
-              "name": "messaging_product",
-              "value": "whatsapp",
-              "type": "string"
-            },
-            {
-              "id": "msg-2",
-              "name": "type",
-              "value": "text",
-              "type": "string"
-            },
-            {
-              "id": "msg-3",
-              "name": "text.body",
+              "id": "waha-2",
+              "name": "text",
               "value": "={{$('Webhook (DIA)').item.json.body.message}}",
+              "type": "string"
+            },
+            {
+              "id": "waha-3",
+              "name": "session",
+              "value": "={{$env.DIA_WAHA_SESSION || 'default'}}",
               "type": "string"
             }
           ]
@@ -79,7 +73,7 @@
         "options": {}
       },
       "id": "33333333-3333-3333-3333-333333333333",
-      "name": "Format WhatsApp payload",
+      "name": "Format WAHA payload",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [720, 220]
@@ -87,15 +81,13 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://graph.facebook.com/v18.0/{{$env.DIA_WHATSAPP_PHONE_ID}}/messages",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
+        "url": "={{$env.DIA_WAHA_BASE_URL}}/api/sendText",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
-              "name": "Authorization",
-              "value": "=Bearer {{$env.DIA_WHATSAPP_TOKEN}}"
+              "name": "X-Api-Key",
+              "value": "={{$env.DIA_WAHA_API_KEY}}"
             },
             {
               "name": "Content-Type",
@@ -106,7 +98,7 @@
         "sendBody": true,
         "bodyContentType": "json",
         "specifyBody": "json",
-        "jsonBody": "={\n  \"messaging_product\": \"whatsapp\",\n  \"to\": \"{{$env.DIA_WHATSAPP_TO}}\",\n  \"type\": \"text\",\n  \"text\": { \"body\": {{JSON.stringify($('Webhook (DIA)').item.json.body.message)}} }\n}",
+        "jsonBody": "={\n  \"chatId\": \"{{$env.DIA_WHATSAPP_TO}}\",\n  \"text\": {{JSON.stringify($('Webhook (DIA)').item.json.body.message)}},\n  \"session\": \"{{$env.DIA_WAHA_SESSION || 'default'}}\"\n}",
         "options": {
           "timeout": 15000,
           "response": {
@@ -118,7 +110,7 @@
         }
       },
       "id": "44444444-4444-4444-4444-444444444444",
-      "name": "Send via WhatsApp Cloud API",
+      "name": "Send via WAHA",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [960, 220]
@@ -126,7 +118,7 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={\n  \"status\": \"sent\",\n  \"alert_id\": {{$('Webhook (DIA)').item.json.body.alert_id}},\n  \"whatsapp_response\": {{JSON.stringify($json)}}\n}",
+        "responseBody": "={\n  \"status\": \"sent\",\n  \"alert_id\": {{$('Webhook (DIA)').item.json.body.alert_id}},\n  \"waha_response\": {{JSON.stringify($json)}}\n}",
         "options": {
           "responseCode": 200
         }
@@ -168,7 +160,7 @@
       "main": [
         [
           {
-            "node": "Format WhatsApp payload",
+            "node": "Format WAHA payload",
             "type": "main",
             "index": 0
           }
@@ -182,18 +174,18 @@
         ]
       ]
     },
-    "Format WhatsApp payload": {
+    "Format WAHA payload": {
       "main": [
         [
           {
-            "node": "Send via WhatsApp Cloud API",
+            "node": "Send via WAHA",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Send via WhatsApp Cloud API": {
+    "Send via WAHA": {
       "main": [
         [
           {

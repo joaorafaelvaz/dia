@@ -209,6 +209,126 @@ async def test_purge_deletes_only_old_test_records(
 
 
 @pytest.mark.asyncio
+async def test_send_test_notification_both_channels_force_bypass(
+    api_client, async_session, sample_dam, monkeypatch
+):
+    """POST /test-harness/notification com channel=both chama whatsapp E email
+    com force=True, mesmo se notifications_enabled=False.
+
+    Garantia: operador pode validar canal antes de ativar notif global.
+    """
+    from app.config import settings
+    from app.services.notifications import (
+        email as email_channel,
+        whatsapp as whatsapp_channel,
+    )
+
+    # Cenário: notif global desligada (caso real do operador testando antes
+    # de ativar). force=True deve mandar mesmo assim.
+    monkeypatch.setattr(settings, "notifications_enabled", False)
+
+    captured: list[tuple[str, bool]] = []
+
+    async def fake_wpp(alert, dam, *, force=False):
+        captured.append(("whatsapp", force))
+        assert force is True, "test harness deve sempre passar force=True"
+        return True
+
+    async def fake_email(alert, dam, *, force=False):
+        captured.append(("email", force))
+        assert force is True
+        return True
+
+    monkeypatch.setattr(whatsapp_channel, "send_alert_whatsapp", fake_wpp)
+    monkeypatch.setattr(email_channel, "send_alert_email", fake_email)
+
+    payload = {
+        "dam_id": sample_dam.id,
+        "channel": "both",
+        "severity": 4,
+        "title": "[TESTE] integração",
+        "message": "ping",
+    }
+    resp = await api_client.post("/api/v1/test-harness/notification", json=payload)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body) == 2
+    assert {r["channel"] for r in body} == {"whatsapp", "email"}
+    assert all(r["sent"] is True for r in body)
+    # notifications_enabled_was reflete o snapshot do momento — útil pra log
+    assert all(r["notifications_enabled_was"] is False for r in body)
+    # Channels foram chamados com force=True (assert dentro do fake)
+    assert ("whatsapp", True) in captured
+    assert ("email", True) in captured
+
+
+@pytest.mark.asyncio
+async def test_send_test_notification_whatsapp_only_skips_email(
+    api_client, async_session, sample_dam, monkeypatch
+):
+    """channel=whatsapp NÃO toca o email — útil quando SMTP nem está
+    configurado e o operador só quer testar WhatsApp."""
+    from app.services.notifications import (
+        email as email_channel,
+        whatsapp as whatsapp_channel,
+    )
+
+    wpp_calls: list[int] = []
+    email_calls: list[int] = []
+
+    async def fake_wpp(alert, dam, *, force=False):
+        wpp_calls.append(alert.severity)
+        return True
+
+    async def fake_email(*_a, **_k):
+        email_calls.append(1)
+        return True
+
+    monkeypatch.setattr(whatsapp_channel, "send_alert_whatsapp", fake_wpp)
+    monkeypatch.setattr(email_channel, "send_alert_email", fake_email)
+
+    payload = {"dam_id": sample_dam.id, "channel": "whatsapp", "severity": 5}
+    resp = await api_client.post("/api/v1/test-harness/notification", json=payload)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body) == 1
+    assert body[0]["channel"] == "whatsapp"
+    assert wpp_calls == [5]
+    assert email_calls == []
+
+
+@pytest.mark.asyncio
+async def test_send_test_notification_failure_keeps_returns_detail(
+    api_client, async_session, sample_dam, monkeypatch
+):
+    """Channel falha (n8n fora, SMTP recusou) → response 200 com sent=False
+    + detail explicando o que conferir. NÃO devolve 500 — operador precisa
+    do feedback estruturado pra debug."""
+    from app.services.notifications import whatsapp as whatsapp_channel
+
+    async def failing_wpp(*_a, **_k):
+        return False
+
+    monkeypatch.setattr(whatsapp_channel, "send_alert_whatsapp", failing_wpp)
+
+    payload = {"dam_id": sample_dam.id, "channel": "whatsapp"}
+    resp = await api_client.post("/api/v1/test-harness/notification", json=payload)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body[0]["sent"] is False
+    assert "N8N_WEBHOOK_URL" in body[0]["detail"]
+
+
+@pytest.mark.asyncio
+async def test_send_test_notification_unknown_dam_returns_404(api_client):
+    resp = await api_client.post(
+        "/api/v1/test-harness/notification",
+        json={"dam_id": 99999, "channel": "whatsapp"},
+    )
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
 async def test_purge_all_resets_to_pre_test_state(
     api_client, async_session, sample_dam
 ):

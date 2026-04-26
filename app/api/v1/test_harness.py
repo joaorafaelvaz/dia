@@ -20,14 +20,19 @@ from app.dependencies import AuthUser, SessionDep
 from app.models.alert import Alert
 from app.models.dam import Dam
 from app.models.forecast import Forecast
+from app.config import settings
 from app.schemas.alert import AlertRead
 from app.schemas.test_harness import (
     TestAlertCreate,
     TestForecastCreate,
     TestHarnessAlertResult,
     TestHarnessPurgeResult,
+    TestNotificationCreate,
+    TestNotificationResult,
 )
 from app.services.climate.aggregator import check_and_create_alerts, compute_risk_score
+from app.services.notifications import email as email_channel
+from app.services.notifications import whatsapp as whatsapp_channel
 from app.utils.logging import get_logger
 
 log = get_logger(__name__)
@@ -213,6 +218,87 @@ async def list_test_alerts(
         .limit(limit)
     )
     return list((await session.execute(stmt)).scalars().all())
+
+
+# ---------------------------------------------------------------------------
+# Modo C — envio direto de WhatsApp/email
+# ---------------------------------------------------------------------------
+
+@router.post("/notification", response_model=list[TestNotificationResult])
+async def send_test_notification(
+    payload: TestNotificationCreate,
+    session: SessionDep,
+    _: AuthUser,
+) -> list[TestNotificationResult]:
+    """Dispara WhatsApp e/ou email DE VERDADE pra validar canal.
+
+    Alert/Dam são objetos in-memory — nada persiste no banco. Usa
+    `force=True` nos channels pra bypassar `notifications_enabled` global
+    (operador clicou explicitamente "enviar teste"). URL/SMTP config
+    ainda são obrigatórios — se faltar, channel retorna False com motivo
+    no log.
+
+    Channel "both" envia pelos dois canais e retorna 2 entries no array.
+    """
+    dam = await session.get(Dam, payload.dam_id)
+    if dam is None:
+        raise HTTPException(status_code=404, detail="Dam not found")
+
+    # Alert in-memory — id falso pra log/payload, não vai pro banco.
+    fake_alert = Alert(
+        dam_id=dam.id,
+        alert_type="test_harness_direct",
+        severity=payload.severity,
+        title=payload.title,
+        message=payload.message,
+        is_active=True,
+        is_test=True,
+    )
+    fake_alert.id = -1  # marca como sintético; n8n pode filtrar se quiser
+
+    channels: list[str] = []
+    if payload.channel in ("whatsapp", "both"):
+        channels.append("whatsapp")
+    if payload.channel in ("email", "both"):
+        channels.append("email")
+    if not channels:
+        raise HTTPException(
+            status_code=400,
+            detail=f"channel inválido: '{payload.channel}'. Use whatsapp, email, both.",
+        )
+
+    notif_was = settings.notifications_enabled
+    results: list[TestNotificationResult] = []
+    for ch in channels:
+        if ch == "whatsapp":
+            ok = await whatsapp_channel.send_alert_whatsapp(fake_alert, dam, force=True)
+            detail = (
+                "POST pro n8n bem-sucedido — verifique o destinatário do WAHA"
+                if ok
+                else "Falhou. Cheque N8N_WEBHOOK_URL/TOKEN no .env e logs do worker"
+            )
+        else:  # email
+            ok = await email_channel.send_alert_email(fake_alert, dam, force=True)
+            detail = (
+                f"SMTP enviou — verifique caixa {settings.alert_email_to or '<não configurado>'}"
+                if ok
+                else "Falhou. Cheque SMTP_HOST/USER/PASS/ALERT_EMAIL_TO e logs"
+            )
+        log.info(
+            "test_harness_direct_notification",
+            channel=ch,
+            sent=ok,
+            dam_id=dam.id,
+        )
+        results.append(
+            TestNotificationResult(
+                channel=ch,
+                sent=ok,
+                detail=detail,
+                notifications_enabled_was=notif_was,
+            )
+        )
+    return results
 
 
 # ---------------------------------------------------------------------------

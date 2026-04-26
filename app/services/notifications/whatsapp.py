@@ -26,13 +26,17 @@ def _format_message(alert: Alert, dam: Dam) -> str:
     )
 
 
-async def send_alert_whatsapp(alert: Alert, dam: Dam) -> bool:
+async def send_alert_whatsapp(alert: Alert, dam: Dam, *, force: bool = False) -> bool:
     """POST alert payload to n8n webhook. Returns True on success.
 
     Feature-flagged: if notifications_enabled is False OR webhook not configured,
     logs intent and returns False without making a request.
+
+    `force=True` bypassa o check de `notifications_enabled` — usado pelo
+    test harness pra validar integração com n8n+WAHA antes de o operador
+    ativar notif global. URL/token ainda são obrigatórios.
     """
-    if not settings.notifications_enabled:
+    if not force and not settings.notifications_enabled:
         log.debug("whatsapp_disabled", alert_id=alert.id, dam_id=dam.id)
         return False
 

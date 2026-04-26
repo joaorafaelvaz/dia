@@ -42,12 +42,16 @@ def _build_email(alert: Alert, dam: Dam) -> EmailMessage:
     return msg
 
 
-async def send_alert_email(alert: Alert, dam: Dam) -> bool:
+async def send_alert_email(alert: Alert, dam: Dam, *, force: bool = False) -> bool:
     """Send SMTP email. Returns True on success.
 
     Feature-flagged: no-op unless notifications_enabled and SMTP fully configured.
+
+    `force=True` bypassa o check de `notifications_enabled` — usado pelo
+    test harness pra validar conectividade SMTP. Configuração SMTP ainda
+    é obrigatória.
     """
-    if not settings.notifications_enabled:
+    if not force and not settings.notifications_enabled:
         log.debug("email_disabled", alert_id=alert.id, dam_id=dam.id)
         return False
 

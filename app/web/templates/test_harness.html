@@ -34,7 +34,7 @@
 <div id="th-purge-result" class="mb-4"></div>
 
 <div class="grid gap-6 lg:grid-cols-3">
-  <!-- Coluna principal: 2 abas -->
+  <!-- Coluna principal: 3 abas -->
   <div class="lg:col-span-2" x-data="{ tab: 'alert' }">
     <div class="mb-3 flex gap-2 border-b border-slate-800">
       <button
@@ -47,6 +47,11 @@
         :class="tab==='forecast' ? 'border-amber-500 text-amber-300' : 'border-transparent text-slate-400 hover:text-slate-200'"
         class="border-b-2 px-3 py-2 text-sm font-medium"
       >Forecast sintético</button>
+      <button
+        @click="tab='notif'"
+        :class="tab==='notif' ? 'border-amber-500 text-amber-300' : 'border-transparent text-slate-400 hover:text-slate-200'"
+        class="border-b-2 px-3 py-2 text-sm font-medium"
+      >Mensagem direta</button>
     </div>
 
     <!-- Modo A: alerta direto -->
@@ -163,6 +168,75 @@
         </label>
         <button class="rounded bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700">
           Injetar forecast sintético
+        </button>
+      </form>
+    </section>
+
+    <!-- Modo C: mensagem direta WhatsApp/email -->
+    <section x-show="tab==='notif'" x-cloak class="rounded border border-slate-800 bg-slate-900 p-4">
+      <p class="mb-3 text-xs text-slate-400">
+        Dispara WhatsApp e/ou email <strong>de verdade</strong> pra validar canal.
+        Não persiste nada no banco. <code class="text-amber-300">force=True</code> bypassa
+        o flag <code>NOTIFICATIONS_ENABLED</code> — você pode testar antes de ativar
+        notif global em produção.
+      </p>
+      <div class="mb-3 rounded border border-amber-700 bg-amber-900/30 px-3 py-2 text-xs text-amber-100">
+        ⚠ A mensagem será enviada de verdade pro número configurado em
+        <code>DIA_WHATSAPP_TO</code> (n8n) e/ou pro email em <code>ALERT_EMAIL_TO</code>.
+        Use com cuidado fora de horário.
+      </div>
+      <form
+        hx-post="/api/v1/test-harness/notification"
+        hx-ext="json-enc"
+        hx-target="#th-alert-result"
+        hx-swap="innerHTML"
+        class="space-y-3"
+      >
+        <div class="grid gap-3 sm:grid-cols-2">
+          <label class="block text-sm">
+            <span class="mb-1 block text-slate-400">Barragem (contexto da mensagem)</span>
+            <select name="dam_id" required class="w-full rounded border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm">
+              {% for dam in dams %}
+                <option value="{{ dam.id }}">{{ dam.name }} — {{ dam.owner_group }} ({{ dam.municipality }}/{{ dam.state }})</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="block text-sm">
+            <span class="mb-1 block text-slate-400">Canal</span>
+            <select name="channel" class="w-full rounded border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm">
+              <option value="both">Ambos (WhatsApp + email)</option>
+              <option value="whatsapp">Apenas WhatsApp (n8n + WAHA)</option>
+              <option value="email">Apenas email (SMTP)</option>
+            </select>
+          </label>
+          <label class="block text-sm">
+            <span class="mb-1 block text-slate-400">Severidade (cosmético, aparece na mensagem)</span>
+            <input
+              type="number" name="severity" min="1" max="5" value="3" required
+              class="w-full rounded border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm"
+            />
+          </label>
+        </div>
+        <label class="block text-sm">
+          <span class="mb-1 block text-slate-400">Título</span>
+          <input
+            type="text" name="title" maxlength="300"
+            value="[TESTE] Mensagem direta do DIA"
+            class="w-full rounded border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm"
+          />
+        </label>
+        <label class="block text-sm">
+          <span class="mb-1 block text-slate-400">Corpo da mensagem</span>
+          <textarea
+            name="message" rows="3"
+            class="w-full rounded border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm"
+          >Mensagem de validação enviada pelo Test Harness do DIA. Se você recebeu, a integração está funcionando. Pode ignorar.</textarea>
+        </label>
+        <button
+          class="rounded bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
+          hx-confirm="Confirmar: enviar mensagem REAL pelos canais selecionados?"
+        >
+          Enviar mensagem de teste
         </button>
       </form>
     </section>

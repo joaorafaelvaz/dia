@@ -64,9 +64,12 @@ dependencies = [
     # --- Email ---
     "aiosmtplib>=3.0.1",
 
-    # --- Logging ---
+    # --- Logging / error tracking ---
     "structlog>=24.2.0",
     "rich>=13.7.1",
+    # Sentry — captura exceções unhandled em prod. No-op silencioso quando
+    # SENTRY_DSN não está setado (dev/test); ativa quando setado.
+    "sentry-sdk[fastapi]>=2.10.0",
 
     # --- Utilities ---
     "tenacity>=8.3.0",

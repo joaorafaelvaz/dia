@@ -87,6 +87,10 @@ class Settings(BaseSettings):
     notifications_enabled: bool = False
     n8n_webhook_url: str = ""
     n8n_webhook_token: str = ""
+    # Destinatário WhatsApp (formato WAHA: 5531999999999@c.us). DIA envia esse
+    # valor no payload pro n8n — assim o flow não precisa ler env vars do
+    # container do n8n (que costuma ter N8N_BLOCK_ENV_ACCESS_IN_NODE=true).
+    dia_whatsapp_to: str = ""
     smtp_host: str = ""
     smtp_port: int = 587
     smtp_user: str = ""

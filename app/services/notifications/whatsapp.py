@@ -47,6 +47,10 @@ async def send_alert_whatsapp(alert: Alert, dam: Dam, *, force: bool = False) ->
     payload = {
         "alert_id": alert.id,
         "severity": alert.severity,
+        # whatsapp_to vai junto pra o flow n8n não precisar ler env var
+        # (n8n bloqueia $env por default). Operador configura DIA_WHATSAPP_TO
+        # no .env do DIA, daí pro payload, daí pro WAHA.
+        "whatsapp_to": settings.dia_whatsapp_to,
         "dam": {
             "id": dam.id,
             "name": dam.name,

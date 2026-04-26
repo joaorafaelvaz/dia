@@ -6,6 +6,7 @@
         "httpMethod": "POST",
         "path": "dam-alerts",
         "responseMode": "responseNode",
+        "authentication": "headerAuth",
         "options": {
           "rawBody": false
         }
@@ -15,36 +16,13 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1.1,
       "position": [240, 300],
-      "webhookId": "dam-alerts"
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict"
-          },
-          "conditions": [
-            {
-              "id": "auth-check-1",
-              "leftValue": "={{$json.headers.authorization}}",
-              "rightValue": "=Bearer {{$env.DIA_WEBHOOK_TOKEN}}",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "22222222-2222-2222-2222-222222222222",
-      "name": "Auth: Bearer ok?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [480, 300]
+      "webhookId": "dam-alerts",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_DIA_WEBHOOK_BEARER_CREDENTIAL_ID",
+          "name": "DIA Webhook Bearer"
+        }
+      }
     },
     {
       "parameters": {
@@ -53,7 +31,7 @@
             {
               "id": "waha-1",
               "name": "chatId",
-              "value": "={{$env.DIA_WHATSAPP_TO}}",
+              "value": "={{$('Webhook (DIA)').item.json.body.whatsapp_to}}",
               "type": "string"
             },
             {
@@ -65,7 +43,7 @@
             {
               "id": "waha-3",
               "name": "session",
-              "value": "={{$env.DIA_WAHA_SESSION || 'default'}}",
+              "value": "default",
               "type": "string"
             }
           ]
@@ -76,19 +54,17 @@
       "name": "Format WAHA payload",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [720, 220]
+      "position": [480, 300]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$env.DIA_WAHA_BASE_URL}}/api/sendText",
+        "url": "https://waha.linkwise.digital/api/sendText",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "X-Api-Key",
-              "value": "={{$env.DIA_WAHA_API_KEY}}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
@@ -98,7 +74,7 @@
         "sendBody": true,
         "bodyContentType": "json",
         "specifyBody": "json",
-        "jsonBody": "={\n  \"chatId\": \"{{$env.DIA_WHATSAPP_TO}}\",\n  \"text\": {{JSON.stringify($('Webhook (DIA)').item.json.body.message)}},\n  \"session\": \"{{$env.DIA_WAHA_SESSION || 'default'}}\"\n}",
+        "jsonBody": "={\n  \"chatId\": {{JSON.stringify($json.chatId)}},\n  \"text\": {{JSON.stringify($json.text)}},\n  \"session\": {{JSON.stringify($json.session)}}\n}",
         "options": {
           "timeout": 15000,
           "response": {
@@ -113,7 +89,13 @@
       "name": "Send via WAHA",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [960, 220]
+      "position": [720, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_WAHA_API_KEY_CREDENTIAL_ID",
+          "name": "WAHA API Key"
+        }
+      }
     },
     {
       "parameters": {
@@ -127,21 +109,7 @@
       "name": "Respond 200 to DIA",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [1200, 220]
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={\n  \"error\": \"unauthorized\",\n  \"detail\": \"Invalid or missing Bearer token\"\n}",
-        "options": {
-          "responseCode": 401
-        }
-      },
-      "id": "66666666-6666-6666-6666-666666666666",
-      "name": "Respond 401",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [720, 420]
+      "position": [960, 300]
     }
   ],
   "connections": {
@@ -149,25 +117,7 @@
       "main": [
         [
           {
-            "node": "Auth: Bearer ok?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Auth: Bearer ok?": {
-      "main": [
-        [
-          {
             "node": "Format WAHA payload",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Respond 401",
             "type": "main",
             "index": 0
           }
@@ -208,7 +158,7 @@
   "tags": [
     {
       "name": "dia",
-      "createdAt": "2026-04-24T00:00:00.000Z"
+      "createdAt": "2026-04-26T00:00:00.000Z"
     }
   ],
   "meta": {

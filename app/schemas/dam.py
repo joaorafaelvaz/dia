@@ -1,7 +1,16 @@
 """Dam schemas."""
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.schemas._form import empty_string_to_none
+
+
+# Campos opcionais que vêm de forms HTML — strings vazias precisam virar None
+# antes do parsing pra evitar 422 em capacity_m3="".
+_OPTIONAL_FORM_FIELDS = (
+    "anm_classification", "cri", "dpa", "notes", "capacity_m3",
+)
 
 
 class DamBase(BaseModel):
@@ -19,6 +28,10 @@ class DamBase(BaseModel):
     capacity_m3: float | None = None
     status: str = "active"
     notes: str | None = None
+
+    _coerce_blank = field_validator(
+        *_OPTIONAL_FORM_FIELDS, mode="before"
+    )(lambda cls, v: empty_string_to_none(v))
 
 
 class DamCreate(DamBase):
@@ -40,6 +53,11 @@ class DamUpdate(BaseModel):
     status: str | None = None
     notes: str | None = None
     is_active: bool | None = None
+
+    # PATCH também recebe form HTML (modo edição) — mesma proteção.
+    _coerce_blank = field_validator(
+        *_OPTIONAL_FORM_FIELDS, mode="before"
+    )(lambda cls, v: empty_string_to_none(v))
 
 
 class DamRead(DamBase):

@@ -79,6 +79,50 @@ async def test_create_dam_dispatches_climate_task(
 
 
 @pytest.mark.asyncio
+async def test_create_dam_form_blanks_become_none_no_422(
+    api_client, async_session, sample_client, monkeypatch
+):
+    """Forms HTML enviam '' pra campos opcionais não preenchidos.
+
+    Regressão real reportada: criar barragem sem capacity_m3 dava 422
+    porque Pydantic tentava parsear "" como float. Validator
+    `mode='before'` em DamBase converte "" → None.
+    """
+    from app.tasks import climate_tasks
+
+    class FakeTask:
+        @staticmethod
+        def delay(_dam_id: int) -> None:
+            pass
+
+    monkeypatch.setattr(climate_tasks, "fetch_climate_data_for_dam", FakeTask)
+
+    payload = {
+        "name": "UHE Belo Monte",
+        "client_id": sample_client.id,
+        "dam_type": "hydropower",
+        "municipality": "Vitória do Xingu",
+        "state": "PA",
+        "latitude": -3.123799,
+        "longitude": -51.77944,
+        # Optional fields que vêm vazios do form HTML (caso real reportado):
+        "capacity_m3": "",
+        "anm_classification": "",
+        "cri": "",
+        "dpa": "",
+        "notes": "",
+    }
+    resp = await api_client.post("/api/v1/dams", json=payload)
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    assert body["capacity_m3"] is None
+    assert body["anm_classification"] is None
+    assert body["cri"] is None
+    assert body["dpa"] is None
+    assert body["notes"] is None
+
+
+@pytest.mark.asyncio
 async def test_create_dam_with_unknown_client_returns_404(
     api_client, async_session
 ):

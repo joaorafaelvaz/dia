@@ -123,6 +123,36 @@ async def test_create_dam_form_blanks_become_none_no_422(
 
 
 @pytest.mark.asyncio
+async def test_patch_dam_updates_location_fields(
+    api_client, async_session, sample_dam
+):
+    """PATCH /dams/{id} muda municipio/UF/lat/long/capacity.
+
+    Cobre o fluxo do botao Editar: operador acessa /dams/{id}/edit,
+    altera campos de localizacao/capacidade e salva. Confirma que cada
+    campo persiste sem afetar os outros.
+    """
+    payload = {
+        "municipality": "Vitória do Xingu",
+        "state": "PA",
+        "latitude": -3.123799,
+        "longitude": -51.77944,
+        "capacity_m3": 3940000000,
+    }
+    resp = await api_client.patch(f"/api/v1/dams/{sample_dam.id}", json=payload)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["municipality"] == "Vitória do Xingu"
+    assert body["state"] == "PA"
+    assert body["latitude"] == pytest.approx(-3.123799)
+    assert body["longitude"] == pytest.approx(-51.77944)
+    assert body["capacity_m3"] == 3940000000
+    # Nome / cliente / tipo NAO foram tocados — exclude_unset preserva
+    assert body["name"] == sample_dam.name
+    assert body["dam_type"] == sample_dam.dam_type
+
+
+@pytest.mark.asyncio
 async def test_create_dam_with_unknown_client_returns_404(
     api_client, async_session
 ):

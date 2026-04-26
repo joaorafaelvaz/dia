@@ -157,6 +157,39 @@ async def dams_list(
     return templates.TemplateResponse(request, "dams/list.html", {"dams": dams})
 
 
+@web_router.get("/dams/{dam_id}/edit", response_class=HTMLResponse)
+async def dams_edit(
+    dam_id: int,
+    request: Request,
+    session: SessionDep,
+    _: AuthUser,
+) -> HTMLResponse:
+    """Form de edição de barragem existente.
+
+    Reusa `dams/form.html`: quando recebe `dam` non-None o template gera
+    PATCH ao invés de POST e pré-popula todos os campos. Operador pode
+    ajustar município, UF, lat/long, capacidade ou qualquer outro campo
+    sem refazer o cadastro.
+    """
+    dam = await session.get(Dam, dam_id)
+    if dam is None:
+        raise HTTPException(status_code=404, detail="Barragem não encontrada")
+    clients = list(
+        (
+            await session.execute(
+                select(Client).where(Client.is_active.is_(True)).order_by(Client.name)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return templates.TemplateResponse(
+        request,
+        "dams/form.html",
+        {"dam": dam, "clients": clients, "preselected_client_id": None},
+    )
+
+
 @web_router.get("/dams/new", response_class=HTMLResponse)
 async def dams_new(
     request: Request,

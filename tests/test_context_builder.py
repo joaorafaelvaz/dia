@@ -82,6 +82,135 @@ async def test_resolve_dam_ids_filters_by_client_name(async_session):
     assert inactive.id not in ids
 
 
+# ---------------------------------------------------------------------------
+# #11 — Regressão pós-refactor 0004 (owner_group string → Client FK)
+# ---------------------------------------------------------------------------
+#
+# Cenário real: operador renomeia "Gerdau" → "Gerdau Aços Longos S.A." pelo
+# menu Cliente. Próximo briefing semanal (cron) deve pegar o nome novo no
+# contexto IA. Antes do 0004 isso seria UPDATE em N rows de `dams.owner_group`;
+# depois do 0004 é UPDATE de 1 row em `clients.name` e a property
+# `Dam.owner_group` lê via JOIN/relationship — risco zero em tese, mas se
+# alguém um dia adicionar cache desnormalizado em Dam, esses testes pegam.
+
+
+@pytest.mark.asyncio
+async def test_build_context_reflects_renamed_client_in_dam_profiles(
+    api_client, async_session
+):
+    """PATCH /clients/{id} com nome novo → próximo build_context retorna
+    DamProfile.owner_group com o nome atualizado, não o antigo.
+    """
+    # Setup inicial
+    client = make_client(name="Empresa Antiga")
+    async_session.add(client)
+    await async_session.commit()
+    await async_session.refresh(client)
+
+    dam = make_dam(name="Barragem X", client_id=client.id, is_active=True)
+    async_session.add(dam)
+    await async_session.commit()
+
+    # Briefing antes do rename
+    ctx_before = await context_builder.build_context(
+        async_session, scope="all", period_days=30, forecast_days=7
+    )
+    profiles_before = {p.name: p.owner_group for p in ctx_before.dam_profiles}
+    assert profiles_before["Barragem X"] == "Empresa Antiga"
+
+    # Rename via API real (passa por endpoint, valida flow completo)
+    resp = await api_client.patch(
+        f"/api/v1/clients/{client.id}", json={"name": "Empresa Nova S.A."}
+    )
+    assert resp.status_code == 200
+
+    # Briefing depois — DEVE pegar o nome novo, não o cached.
+    # Expira a session pra evitar identity map mascarar o teste em SQLite.
+    async_session.expire_all()
+    ctx_after = await context_builder.build_context(
+        async_session, scope="all", period_days=30, forecast_days=7
+    )
+    profiles_after = {p.name: p.owner_group for p in ctx_after.dam_profiles}
+    assert profiles_after["Barragem X"] == "Empresa Nova S.A."
+
+
+@pytest.mark.asyncio
+async def test_render_dam_profiles_md_reflects_renamed_client(
+    api_client, async_session
+):
+    """O markdown que entra no prompt do Claude usa o nome novo.
+
+    `render_dam_profiles_md` formata "### {dam.name} — {dam.owner_group}".
+    Confirma que após rename o markdown não vaza o nome antigo pro
+    contexto IA — Opus 4.7 num briefing semanal vê 'Empresa Nova', não
+    'Empresa Antiga'.
+    """
+    client = make_client(name="Antiga Mineração")
+    async_session.add(client)
+    await async_session.commit()
+    await async_session.refresh(client)
+    dam = make_dam(name="Barragem dos Alemães", client_id=client.id)
+    async_session.add(dam)
+    await async_session.commit()
+
+    # Rename
+    resp = await api_client.patch(
+        f"/api/v1/clients/{client.id}", json={"name": "Nova Mineração Ltda"}
+    )
+    assert resp.status_code == 200
+    async_session.expire_all()
+
+    ctx = await context_builder.build_context(
+        async_session, scope="all", period_days=30
+    )
+    md = context_builder.render_dam_profiles_md(ctx.dam_profiles)
+    assert "Nova Mineração Ltda" in md
+    assert "Antiga Mineração" not in md
+
+
+@pytest.mark.asyncio
+async def test_resolve_dam_ids_uses_current_client_name_after_rename(
+    api_client, async_session
+):
+    """Filtro `scope="novo_nome"` funciona após rename.
+
+    Cron do relatório-cliente mensal usa `_owner_groups()` pra descobrir
+    nomes ativos e dispara `generate_report(scope=name.lower())`. Se um
+    cliente foi renomeado, o filtro novo (`Client.name.ilike(scope)`)
+    deve continuar achando dams ativas.
+
+    Cobre também o ramo negativo: scope com nome ANTIGO não retorna nada.
+    """
+    client = make_client(name="Cliente Original")
+    async_session.add(client)
+    await async_session.commit()
+    await async_session.refresh(client)
+    dam = make_dam(name="D1", client_id=client.id, is_active=True)
+    async_session.add(dam)
+    await async_session.commit()
+    await async_session.refresh(dam)
+    dam_id = dam.id
+
+    # Rename
+    resp = await api_client.patch(
+        f"/api/v1/clients/{client.id}", json={"name": "Cliente Renomeado"}
+    )
+    assert resp.status_code == 200
+    async_session.expire_all()
+
+    # Nome novo encontra
+    ids_new = await context_builder.resolve_dam_ids(
+        async_session, scope="cliente renomeado"
+    )
+    assert dam_id in ids_new
+
+    # Nome antigo não encontra mais (case-insensitive ilike no nome novo)
+    ids_old = await context_builder.resolve_dam_ids(
+        async_session, scope="cliente original"
+    )
+    assert dam_id not in ids_old
+
+
 @pytest.mark.asyncio
 async def test_generate_briefing_persists_html_when_claude_responds(
     async_session, sample_dam, monkeypatch
